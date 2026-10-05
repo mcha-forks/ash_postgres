@@ -1,15 +1,25 @@
+# SPDX-FileCopyrightText: 2019 ash_postgres contributors <https://github.com/ash-project/ash_postgres/graphs/contributors>
+#
+# SPDX-License-Identifier: MIT
+
 defmodule AshPostgres.SelectTest do
   @moduledoc false
   use AshPostgres.RepoCase, async: false
-  alias AshPostgres.Test.{Api, Post}
-
-  require Ash.Query
+  alias AshPostgres.Test.Post
 
   test "values not selected in the query are not present in the response" do
     Post
-    |> Ash.Changeset.new(%{title: "title"})
-    |> Api.create!()
+    |> Ash.Changeset.for_create(:create, %{title: "title"})
+    |> Ash.create!()
 
-    assert [%{title: nil}] = Api.read!(Ash.Query.select(Post, :id))
+    assert [%{title: %Ash.NotLoaded{}}] = Ash.read!(Ash.Query.select(Post, :id))
+  end
+
+  test "values not selected in a changeset are not present in the response" do
+    assert %{title: %Ash.NotLoaded{}} =
+             Post
+             |> Ash.Changeset.for_create(:create, %{title: "title"})
+             |> Ash.Changeset.select([])
+             |> Ash.create!()
   end
 end

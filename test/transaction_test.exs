@@ -1,8 +1,10 @@
+# SPDX-FileCopyrightText: 2019 ash_postgres contributors <https://github.com/ash-project/ash_postgres/graphs/contributors>
+#
+# SPDX-License-Identifier: MIT
+
 defmodule AshPostgres.Test.TransactionTest do
   use AshPostgres.RepoCase, async: false
-  alias AshPostgres.Test.{Api, Post}
-
-  require Ash.Query
+  alias AshPostgres.Test.Post
 
   test "after_transaction hooks are invoked on failure" do
     assert_raise Ash.Error.Unknown, ~r/something bad happened/, fn ->
@@ -12,7 +14,7 @@ defmodule AshPostgres.Test.TransactionTest do
         raise "something bad happened"
       end)
       |> send_after_transaction_result()
-      |> Api.create()
+      |> Ash.create()
     end
 
     assert_receive {:error,
@@ -32,12 +34,12 @@ defmodule AshPostgres.Test.TransactionTest do
           raise "something bad happened inside"
         end)
         |> send_after_transaction_result()
-        |> Api.create!()
+        |> Ash.create!()
 
         {:ok, result}
       end)
       |> send_after_transaction_result()
-      |> Api.create()
+      |> Ash.create()
     end
 
     assert_receive {:error,
@@ -52,7 +54,7 @@ defmodule AshPostgres.Test.TransactionTest do
     Post
     |> Ash.Changeset.for_create(:create)
     |> send_after_transaction_result()
-    |> Api.create()
+    |> Ash.create()
 
     assert_receive {:ok, %Post{}}
   end
@@ -68,17 +70,17 @@ defmodule AshPostgres.Test.TransactionTest do
                  raise "something bad happened inside"
                end)
                |> send_after_transaction_result()
-               |> Api.create!()
+               |> Ash.create!()
 
                {:ok, result}
              end)
              |> Ash.Changeset.after_transaction(fn _changeset, {:error, _} ->
                Post
                |> Ash.Changeset.for_create(:create)
-               |> Api.create()
+               |> Ash.create()
              end)
              |> send_after_transaction_result()
-             |> Api.create()
+             |> Ash.create()
 
     assert_receive {:error,
                     %RuntimeError{

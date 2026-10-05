@@ -1,15 +1,20 @@
+# SPDX-FileCopyrightText: 2019 ash_postgres contributors <https://github.com/ash-project/ash_postgres/graphs/contributors>
+#
+# SPDX-License-Identifier: MIT
+
 defmodule Mix.Tasks.AshPostgres.GenerateMigrations do
   @moduledoc """
   Generates migrations, and stores a snapshot of your resources.
 
   Options:
 
-  * `apis` - a comma separated list of API modules, for which migrations will be generated
-  * `snapshot-path` - a custom path to store the snapshots, defaults to "priv/resource_snapshots"
-  * `migration-path` - a custom path to store the migrations, defaults to "priv".
+  * `domains` - a comma separated list of Domain modules, for which migrations will be generated.
+      Defaults to the domains configured in the application's `:ash_domains` configuration.
+  * `snapshot-path` - a custom path to store the snapshots, defaults to "priv/repo_name/resource_snapshots"
+  * `migration-path` - a custom path to store the migrations, defaults to "priv/repo_name/migrations".
     Migrations are stored in a folder for each repo, so `priv/repo_name/migrations`
-  * `tenant-migration-path` - Same as `migration_path`, except for any tenant specific migrations
-  * `drop-columns` - whether or not to drop columns as attributes are removed. See below for more
+  * `tenant-migration-path` - Same as `migration_path`, except for tenant-specific migrations
+  * `dont-drop-columns` - whether or not to drop columns as attributes are removed. See below for more
   * `name` -
       names the generated migrations, prepending with the timestamp. The default is `migrate_resources_<n>`,
       where `<n>` is the count of migrations matching `*migrate_resources*` plus one.
@@ -21,6 +26,9 @@ defmodule Mix.Tasks.AshPostgres.GenerateMigrations do
   * `no-format` - files that are created will not be formatted with the code formatter
   * `dry-run` - no files are created, instead the new migration is printed
   * `check` - no files are created, returns an exit(1) code if the current snapshots and resources don't fit
+  * `dev` - dev files are created
+  * `snapshots-only` - no migrations are generated, only snapshots are stored
+  * `concurrent-indexes` - new identities will be run concurrently and in a separate migration (like concurrent custom indexes)
 
   #### Snapshots
 
@@ -34,13 +42,11 @@ defmodule Mix.Tasks.AshPostgres.GenerateMigrations do
 
   Generally speaking, it is bad practice to drop columns when you deploy a change that
   would remove an attribute. The main reasons for this are backwards compatibility and rolling restarts.
-  If you deploy an attribute removal, and run migrations. Regardless of your deployment sstrategy, you
+  If you deploy an attribute removal, and run migrations. Regardless of your deployment strategy, you
   won't be able to roll back, because the data has been deleted. In a rolling restart situation, some of
   the machines/pods/whatever may still be running after the column has been deleted, causing errors. With
   this in mind, its best not to delete those columns until later, after the data has been confirmed unnecessary.
-  To that end, the migration generator leaves the column dropping code commented. You can pass `--drop_columns`
-  to tell it to uncomment those statements. Additionally, you can just uncomment that code on a case by case
-  basis.
+  To that end, you can pass `--dont-drop-columns` to tell it to comment out those statements.
 
   #### Conflicts/Multiple Resources
 
@@ -49,6 +55,14 @@ defmodule Mix.Tasks.AshPostgres.GenerateMigrations do
   types. It will prompt to resolve conflicts that can be resolved with human input.
   For example, if you remove an attribute and add an attribute, it will ask you if you are renaming
   the column in question. If not, it will remove one column and add the other.
+
+  #### Dropping tables when resources are removed
+
+  When you remove a resource from your domain, the generator compares current resources to existing snapshots. Tables that have a snapshot but no longer exist in the domain are treated as removed. Before generating a migration to drop each such table, the generator will ask whether or not you'd like to generate a migration to drop the table. If you answer no, the generator will not ask again for that table on future runs. If you answer yes, a migration is generated to drop the table and the corresponding snapshot directory is removed. Run `mix ash_postgres.generate_migrations --name remove_my_resource` (or similar) after deleting a resource to generate the drop migration.
+
+  #### Renaming tables
+
+  When you change a resource's table name, if the generator detects one removed table and one new table in the same schema, it will ask if you are intending to rename the table. If you answer yes, a single migration is generated using Ecto's `rename table(...), to: table(...)`, which renames the table in place and preserves data and foreign keys. If you answer no, it generates a drop of the old table and a create of the new one instead.
 
   Additionally, it lowers things to the database where possible:
 
@@ -72,29 +86,46 @@ defmodule Mix.Tasks.AshPostgres.GenerateMigrations do
 
   @shortdoc "Generates migrations, and stores a snapshot of your resources"
   def run(args) do
+    {name, args} =
+      case args do
+        ["-" <> _ | _] ->
+          {nil, args}
+
+        [first | rest] ->
+          {first, rest}
+
+        [] ->
+          {nil, []}
+      end
+
     {opts, _} =
       OptionParser.parse!(args,
         strict: [
-          apis: :string,
+          domains: :string,
           snapshot_path: :string,
           migration_path: :string,
           tenant_migration_path: :string,
           quiet: :boolean,
+          snapshots_only: :boolean,
+          auto_name: :boolean,
           name: :string,
           no_format: :boolean,
           dry_run: :boolean,
           check: :boolean,
-          drop_columns: :boolean
+          dev: :boolean,
+          dont_drop_columns: :boolean,
+          concurrent_indexes: :boolean
         ]
       )
 
-    apis = AshPostgres.MixHelpers.apis!(opts, args)
+    domains = AshPostgres.Mix.Helpers.domains!(opts, args)
 
     opts =
       opts
       |> Keyword.put(:format, !opts[:no_format])
       |> Keyword.delete(:no_format)
+      |> Keyword.put_new(:name, name)
 
-    AshPostgres.MigrationGenerator.generate(apis, opts)
+    AshPostgres.MigrationGenerator.generate(domains, opts)
   end
 end

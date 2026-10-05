@@ -1,18 +1,33 @@
+# SPDX-FileCopyrightText: 2019 ash_postgres contributors <https://github.com/ash-project/ash_postgres/graphs/contributors>
+#
+# SPDX-License-Identifier: MIT
+
 defmodule AshPostgres.Test.MultitenancyTest do
   use AshPostgres.RepoCase, async: false
 
-  alias AshPostgres.MultitenancyTest.{Api, Org, Post, User}
+  require Ash.Query
+
+  alias AshPostgres.MultitenancyTest.{
+    CompositeKeyPost,
+    NamedOrg,
+    NonMultitenantPostMultitenantLink,
+    Org,
+    Post,
+    User
+  }
+
+  alias AshPostgres.Test.Post, as: GlobalPost
 
   setup do
     org1 =
       Org
-      |> Ash.Changeset.new(name: "test1")
-      |> Api.create!()
+      |> Ash.Changeset.for_create(:create, %{name: "test1"}, authorize?: false)
+      |> Ash.create!()
 
     org2 =
       Org
-      |> Ash.Changeset.new(name: "test2")
-      |> Api.create!()
+      |> Ash.Changeset.for_create(:create, %{name: "test2"}, authorize?: false)
+      |> Ash.create!()
 
     [org1: org1, org2: org2]
   end
@@ -30,11 +45,84 @@ defmodule AshPostgres.Test.MultitenancyTest do
     assert Enum.sort(AshPostgres.TestRepo.all_tenants()) == tenant_ids
   end
 
+  test "rename_tenant raises rather than silently succeeding when the target schema exists" do
+    repo = AshPostgres.TestRepo
+    Ecto.Adapters.SQL.query!(repo, ~s(CREATE SCHEMA IF NOT EXISTS "ash_rename_src"))
+    Ecto.Adapters.SQL.query!(repo, ~s(CREATE SCHEMA IF NOT EXISTS "ash_rename_dest"))
+
+    # Renaming onto an existing schema is rejected by PostgreSQL; the caller must
+    # see the failure so the surrounding transaction rolls back (not a false :ok).
+    assert_raise Postgrex.Error, fn ->
+      AshPostgres.MultiTenancy.rename_tenant(repo, "ash_rename_src", "ash_rename_dest")
+    end
+  end
+
+  test "lateral joining attribute multitenancy to context multitenancy works", %{org1: org1} do
+    Org
+    |> Ash.Query.for_read(:read, %{}, tenant: org1)
+    |> Ash.Query.load(posts: Ash.Query.limit(Post, 2))
+    |> Ash.read!()
+  end
+
   test "attribute multitenancy works", %{org1: %{id: org_id} = org1} do
     assert [%{id: ^org_id}] =
              Org
-             |> Ash.Query.set_tenant(tenant(org1))
-             |> Api.read!()
+             |> Ash.Query.set_tenant(org1)
+             |> Ash.read!()
+  end
+
+  test "joining to non multitenant through relationship works", %{org1: org1} do
+    Post
+    |> Ash.Query.filter(linked_non_multitenant_posts.title == "fred")
+    |> Ash.Query.set_tenant("org_" <> org1.id)
+    |> Ash.read!()
+  end
+
+  test "joining from non multitenant through relationship works", %{org1: org1} do
+    GlobalPost
+    |> Ash.Query.filter(linked_multitenant_posts.name == "fred")
+    |> Ash.Query.set_tenant("org_" <> org1.id)
+    |> Ash.read!()
+  end
+
+  test "attribute multitenancy works with authorization", %{org1: org1} do
+    user =
+      User
+      |> Ash.Changeset.new()
+      |> Ash.Changeset.manage_relationship(:org, org1, type: :append_and_remove)
+      |> Ash.create!()
+
+    assert [] =
+             Org
+             |> Ash.Query.set_tenant("org_" <> org1.id)
+             |> Ash.Query.for_read(:has_policies, %{}, actor: user, authorize?: true)
+             |> Ash.read!()
+  end
+
+  test "context multitenancy works with policies", %{org1: org1} do
+    post =
+      Post
+      |> Ash.Changeset.for_create(:create, %{name: "foo"}, tenant: org1)
+      |> Ash.create!()
+
+    post
+    |> Ash.Changeset.for_update(:update_with_policy, %{}, authorize?: true, tenant: org1)
+    |> Ash.update!()
+  end
+
+  test "context multitenancy sets the tenant on exists() subqueries when destroying", %{
+    org1: org1
+  } do
+    post =
+      Post
+      |> Ash.Changeset.for_create(:create, %{name: "foo"}, tenant: org1)
+      |> Ash.create!()
+
+    post
+    |> Ash.Changeset.for_destroy(:destroy_with_exists, %{}, tenant: org1)
+    |> Ash.destroy!()
+
+    assert Post |> Ash.Query.set_tenant(org1) |> Ash.read!() == []
   end
 
   test "attribute multitenancy is set on creation" do
@@ -42,29 +130,29 @@ defmodule AshPostgres.Test.MultitenancyTest do
 
     org =
       Org
-      |> Ash.Changeset.new(name: "test3")
+      |> Ash.Changeset.for_create(:create, %{name: "test3"})
       |> Ash.Changeset.set_tenant("org_#{uuid}")
-      |> Api.create!()
+      |> Ash.create!()
 
     assert org.id == uuid
   end
 
   test "schema multitenancy works", %{org1: org1, org2: org2} do
     Post
-    |> Ash.Changeset.new(name: "foo")
-    |> Ash.Changeset.set_tenant(tenant(org1))
-    |> Api.create!()
+    |> Ash.Changeset.for_create(:create, %{name: "foo"})
+    |> Ash.Changeset.set_tenant(org1)
+    |> Ash.create!()
 
-    assert [_] = Post |> Ash.Query.set_tenant(tenant(org1)) |> Api.read!()
-    assert [] = Post |> Ash.Query.set_tenant(tenant(org2)) |> Api.read!()
+    assert [_] = Post |> Ash.Query.set_tenant(org1) |> Ash.read!()
+    assert [] = Post |> Ash.Query.set_tenant(org2) |> Ash.read!()
   end
 
   test "schema rename on update works", %{org1: org1} do
     new_uuid = Ash.UUID.generate()
 
     org1
-    |> Ash.Changeset.new(id: new_uuid)
-    |> Api.update!()
+    |> Ash.Changeset.for_update(:update, %{id: new_uuid})
+    |> Ash.update!()
 
     new_tenant = "org_#{new_uuid}"
 
@@ -77,110 +165,354 @@ defmodule AshPostgres.Test.MultitenancyTest do
              )
   end
 
+  test "composite key multitenancy works", %{org1: org1} do
+    CompositeKeyPost
+    |> Ash.Changeset.for_create(:create, %{title: "foo"})
+    |> Ash.Changeset.manage_relationship(:org, org1, type: :append_and_remove)
+    |> Ash.Changeset.set_tenant(org1)
+    |> Ash.create!()
+
+    assert [_] = CompositeKeyPost |> Ash.Query.set_tenant(org1) |> Ash.read!()
+  end
+
   test "loading attribute multitenant resources from context multitenant resources works" do
     org =
       Org
       |> Ash.Changeset.new()
-      |> Api.create!()
+      |> Ash.create!()
 
     user =
       User
       |> Ash.Changeset.new()
       |> Ash.Changeset.manage_relationship(:org, org, type: :append_and_remove)
-      |> Api.create!()
+      |> Ash.create!()
 
-    assert Api.load!(user, :org).org.id == org.id
+    assert Ash.load!(user, :org).org.id == org.id
   end
 
   test "loading context multitenant resources from attribute multitenant resources works" do
     org =
       Org
       |> Ash.Changeset.new()
-      |> Api.create!()
+      |> Ash.create!()
 
-    user1 =
+    user =
       User
-      |> Ash.Changeset.new(%{name: "a"})
+      |> Ash.Changeset.for_create(:create, %{name: "a"}, tenant: "org_#{org.id}")
       |> Ash.Changeset.manage_relationship(:org, org, type: :append_and_remove)
-      |> Api.create!()
+      |> Ash.create!()
 
     user2 =
       User
-      |> Ash.Changeset.new(%{name: "b"})
+      |> Ash.Changeset.for_create(:create, %{name: "a"}, tenant: "org_#{org.id}")
       |> Ash.Changeset.manage_relationship(:org, org, type: :append_and_remove)
-      |> Api.create!()
+      |> Ash.create!()
 
-    user1_id = user1.id
-    user2_id = user2.id
+    post =
+      Post
+      |> Ash.Changeset.for_create(:create, %{name: "foobar"},
+        authorize?: false,
+        tenant: "org_#{org.id}"
+      )
+      |> Ash.Changeset.manage_relationship(:user, user, type: :append_and_remove)
+      |> Ash.create!()
 
-    assert [%{id: ^user1_id}, %{id: ^user2_id}] =
-             Api.load!(org, users: Ash.Query.sort(User, :name)).users
+    post_id = post.id
+
+    assert [%{posts: [%{id: ^post_id}]}, _] =
+             Ash.load!([user, user2], [posts: Ash.Query.limit(Post, 2)],
+               tenant: "org_#{org.id}",
+               authorize?: false
+             )
+  end
+
+  test "loading context multitenant resources across a many-to-many with a limit works" do
+    org =
+      Org
+      |> Ash.Changeset.new()
+      |> Ash.create!()
+
+    user =
+      User
+      |> Ash.Changeset.for_create(:create, %{name: "a"}, tenant: "org_#{org.id}")
+      |> Ash.Changeset.manage_relationship(:org, org, type: :append_and_remove)
+      |> Ash.create!()
+
+    post =
+      Post
+      |> Ash.Changeset.for_create(:create, %{name: "foobar"},
+        authorize?: false,
+        tenant: "org_#{org.id}"
+      )
+      |> Ash.Changeset.manage_relationship(:user, user, type: :append_and_remove)
+      |> Ash.create!()
+
+    post2 =
+      Post
+      |> Ash.Changeset.for_create(:create, %{name: "foobar"},
+        authorize?: false,
+        tenant: "org_#{org.id}"
+      )
+      |> Ash.Changeset.manage_relationship(:user, user, type: :append_and_remove)
+      |> Ash.Changeset.manage_relationship(:linked_posts, post, type: :append_and_remove)
+      |> Ash.create!()
+
+    post_id = post.id
+
+    assert [%{linked_posts: [%{id: ^post_id}]}, _] =
+             Ash.load!([post2, post], [linked_posts: Ash.Query.limit(Post, 2)],
+               tenant: "org_#{org.id}",
+               authorize?: false
+             )
+  end
+
+  test "loading non multitenant resource across a many_to_many works", %{org1: org1} do
+    post =
+      Post
+      |> Ash.Changeset.for_create(:create, %{name: "foo"})
+      |> Ash.Changeset.set_tenant(org1)
+      |> Ash.create!()
+
+    global_post =
+      GlobalPost
+      |> Ash.Changeset.for_create(:create, %{title: "fred"})
+      |> Ash.create!()
+
+    NonMultitenantPostMultitenantLink
+    |> Ash.Changeset.for_create(:create, %{source_id: post.id, dest_id: global_post.id},
+      tenant: org1
+    )
+    |> Ash.create!()
+
+    post
+    |> Ash.load!([:linked_non_multitenant_posts_through_multitenant_link], tenant: org1)
   end
 
   test "manage_relationship from context multitenant resource to attribute multitenant resource doesn't raise an error" do
-    org = Org |> Ash.Changeset.new() |> Api.create!()
-    user = User |> Ash.Changeset.new() |> Api.create!()
+    org = Org |> Ash.Changeset.new() |> Ash.create!()
+    user = User |> Ash.Changeset.new() |> Ash.create!()
 
     Post
-    |> Ash.Changeset.for_create(:create, %{}, tenant: tenant(org))
+    |> Ash.Changeset.for_create(:create, %{}, tenant: org)
     |> Ash.Changeset.manage_relationship(:user, user, type: :append_and_remove)
-    |> Api.create!()
+    |> Ash.create!()
   end
 
   test "loading attribute multitenant resources with limits from context multitenant resources works" do
     org =
       Org
       |> Ash.Changeset.new()
-      |> Api.create!()
+      |> Ash.create!()
 
     user =
       User
       |> Ash.Changeset.new()
       |> Ash.Changeset.manage_relationship(:org, org, type: :append_and_remove)
-      |> Api.create!()
+      |> Ash.create!()
 
-    assert Api.load!(user, :org).org.id == org.id
+    assert Ash.load!(user, :org).org.id == org.id
   end
 
   test "loading context multitenant resources with limits from attribute multitenant resources works" do
     org =
       Org
       |> Ash.Changeset.new()
-      |> Api.create!()
+      |> Ash.create!()
 
     user1 =
       User
-      |> Ash.Changeset.new(%{name: "a"})
+      |> Ash.Changeset.for_create(:create, %{name: "a"})
       |> Ash.Changeset.manage_relationship(:org, org, type: :append_and_remove)
-      |> Api.create!()
+      |> Ash.create!()
 
     user2 =
       User
-      |> Ash.Changeset.new(%{name: "b"})
+      |> Ash.Changeset.for_create(:create, %{name: "b"})
       |> Ash.Changeset.manage_relationship(:org, org, type: :append_and_remove)
-      |> Api.create!()
+      |> Ash.create!()
 
     user1_id = user1.id
     user2_id = user2.id
 
     assert [%{id: ^user1_id}, %{id: ^user2_id}] =
-             Api.load!(org, users: Ash.Query.sort(Ash.Query.limit(User, 10), :name)).users
+             Ash.load!(org, users: Ash.Query.sort(Ash.Query.limit(User, 10), :name)).users
   end
 
   test "unique constraints are properly scoped", %{org1: org1} do
     post =
       Post
-      |> Ash.Changeset.new(%{})
-      |> Ash.Changeset.set_tenant(tenant(org1))
-      |> Api.create!()
+      |> Ash.Changeset.for_create(:create, %{})
+      |> Ash.Changeset.set_tenant(org1)
+      |> Ash.create!()
 
     assert_raise Ash.Error.Invalid,
                  ~r/Invalid value provided for id: has already been taken/,
                  fn ->
                    Post
-                   |> Ash.Changeset.new(%{id: post.id})
-                   |> Ash.Changeset.set_tenant(tenant(org1))
-                   |> Api.create!()
+                   |> Ash.Changeset.for_create(:create, %{id: post.id})
+                   |> Ash.Changeset.set_tenant(org1)
+                   |> Ash.create!()
                  end
+  end
+
+  test "rejects characters other than alphanumericals, - and _ on tenant creation" do
+    assert_raise(
+      Ash.Error.Unknown,
+      ~r/Tenant name must match ~r\/\\A\[a-zA-Z0-9_-]\+\\z\/, got:/,
+      fn ->
+        NamedOrg
+        |> Ash.Changeset.for_create(:create, %{name: "🚫"})
+        |> Ash.create!()
+      end
+    )
+  end
+
+  test "trims whitespace from tenant names on tenant creation" do
+    org =
+      NamedOrg
+      |> Ash.Changeset.for_create(:create, %{name: "trimmed\n"})
+      |> Ash.create!()
+
+    assert %{rows: [["org_trimmed"]]} =
+             AshPostgres.TestRepo.query!(
+               "SELECT schema_name FROM information_schema.schemata WHERE schema_name = 'org_trimmed'"
+             )
+
+    org
+    |> Ash.Changeset.for_update(:update, %{name: "toto1"})
+    |> Ash.update!()
+  end
+
+  test "rejects characters other than alphanumericals, - and _ when renaming tenant" do
+    org =
+      NamedOrg
+      |> Ash.Changeset.for_create(:create, %{name: "toto"})
+      |> Ash.create!()
+
+    assert_raise(
+      Ash.Error.Unknown,
+      ~r/Tenant name must match ~r\/\\A\[a-zA-Z0-9_-]\+\\z\/, got:/,
+      fn ->
+        org
+        |> Ash.Changeset.for_update(:update, %{name: "🚫"})
+        |> Ash.update!()
+      end
+    )
+  end
+
+  describe "context multitenancy prefix inheritance" do
+    test "loading aggregates on context multitenant resources with relationships works", %{
+      org1: org1
+    } do
+      user =
+        User
+        |> Ash.Changeset.for_create(:create, %{name: "a"}, tenant: tenant(org1))
+        |> Ash.Changeset.manage_relationship(:org, org1, type: :append_and_remove)
+        |> Ash.create!()
+
+      _post =
+        Post
+        |> Ash.Changeset.for_create(:create, %{name: "foobar"},
+          authorize?: false,
+          tenant: tenant(org1)
+        )
+        |> Ash.Changeset.manage_relationship(:user, user, type: :append_and_remove)
+        |> Ash.create!()
+
+      # Load an aggregate that goes through a relationship path crossing multitenancy boundaries
+      # This should properly inherit the prefix from the parent query
+      assert [%{count_visited: 1}] =
+               User
+               |> Ash.Query.filter(id == ^user.id)
+               |> Ash.Query.load(:count_visited)
+               |> Ash.Query.set_tenant(tenant(org1))
+               |> Ash.read!()
+    end
+
+    test "a distinct aggregate on a context-multitenant resource stays within the tenant schema",
+         %{org1: org1} do
+      tenant = tenant(org1)
+
+      post =
+        Post
+        |> Ash.Changeset.for_create(:create, %{name: "keep"}, authorize?: false, tenant: tenant)
+        |> Ash.create!()
+
+      Post
+      |> Ash.Changeset.for_create(:create, %{name: "keep"}, authorize?: false, tenant: tenant)
+      |> Ash.Changeset.manage_relationship(:linked_posts, post, type: :append_and_remove)
+      |> Ash.create!()
+
+      # Filtering across a to-many relationship makes the aggregate query
+      # `distinct`, which takes the branch that used to drop the tenant prefix.
+      aggregate_query =
+        Post
+        |> Ash.Query.filter(linked_posts.name == "keep")
+        |> Ash.Query.set_tenant(tenant)
+
+      assert %{cnt: 1} =
+               Post
+               |> Ash.Query.set_tenant(tenant)
+               |> Ash.aggregate!({:cnt, :count, query: aggregate_query},
+                 tenant: tenant,
+                 authorize?: false
+               )
+    end
+
+    test "loading context multitenant relationship from attribute multitenant resource inherits prefix",
+         %{org1: org1} do
+      user =
+        User
+        |> Ash.Changeset.for_create(:create, %{name: "test_user"}, tenant: tenant(org1))
+        |> Ash.Changeset.manage_relationship(:org, org1, type: :append_and_remove)
+        |> Ash.create!()
+
+      post =
+        Post
+        |> Ash.Changeset.for_create(:create, %{name: "test_post"},
+          authorize?: false,
+          tenant: tenant(org1)
+        )
+        |> Ash.Changeset.manage_relationship(:user, user, type: :append_and_remove)
+        |> Ash.create!()
+
+      # Load posts from user - this crosses from attribute multitenancy to context multitenancy
+      # The prefix should be properly set on the join query
+      loaded_user = Ash.load!(user, :posts, tenant: tenant(org1))
+      assert length(loaded_user.posts) == 1
+      assert hd(loaded_user.posts).id == post.id
+    end
+
+    test "querying context multitenant resource and loading many_to_many properly inherits prefix",
+         %{org1: org1} do
+      post1 =
+        Post
+        |> Ash.Changeset.for_create(:create, %{name: "post1"},
+          authorize?: false,
+          tenant: tenant(org1)
+        )
+        |> Ash.create!()
+
+      post2 =
+        Post
+        |> Ash.Changeset.for_create(:create, %{name: "post2"},
+          authorize?: false,
+          tenant: tenant(org1)
+        )
+        |> Ash.Changeset.manage_relationship(:linked_posts, [post1], type: :append_and_remove)
+        |> Ash.create!()
+
+      # Query with tenant set, load many_to_many relationship
+      # The join through PostLink should inherit the prefix
+      result =
+        Post
+        |> Ash.Query.filter(id == ^post2.id)
+        |> Ash.Query.load(:linked_posts)
+        |> Ash.Query.set_tenant(tenant(org1))
+        |> Ash.read!()
+
+      assert [%{linked_posts: [%{id: post1_id}]}] = result
+      assert post1_id == post1.id
+    end
   end
 end

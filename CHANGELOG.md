@@ -1,3834 +1,1657 @@
+<!--
+SPDX-FileCopyrightText: 2020 Zach Daniel
+
+SPDX-License-Identifier: MIT
+-->
+
 # Change Log
 
 All notable changes to this project will be documented in this file.
-See [Conventional Commits](Https://conventionalcommits.org) for commit guidelines.
+See [Conventional Commits](https://www.conventionalcommits.org) for commit guidelines.
 
 <!-- changelog -->
 
-## [v1.3.51](https://github.com/ash-project/ash_postgres/compare/v1.3.50...v1.3.51) (2023-09-20)
+## [v2.14.2](https://github.com/ash-project/ash_postgres/compare/v2.14.1...v2.14.2) (2026-10-04)
+
+
+
+
+### Bug Fixes:
+
+* properly handle upserts on identities by Zach Daniel
+
+### Performance Improvements:
+
+* better query building speed by Zach Daniel
+
+## [v2.14.1](https://github.com/ash-project/ash_postgres/compare/v2.14.0...v2.14.1) (2026-10-04)
 
 
 
 
 ### Improvements:
 
-* add `AshPostgres.Tsvector`
+* own temporal operations because Postgres beta removed it by Zach Daniel
 
-* add AshPostgres.Tsquery
+* own temporal operations because Postgres beta removed it by Zach Daniel
 
-* support vector types and `vector_cosine_distance`
-
-## [v1.3.50](https://github.com/ash-project/ash_postgres/compare/v1.3.49...v1.3.50) (2023-09-06)
-
-
-
-
-### Improvements:
-
-* Allow resources to opt out of the primary key requirement. (#166)
-
-## [v1.3.49](https://github.com/ash-project/ash_postgres/compare/v1.3.48...v1.3.49) (2023-09-04)
-
-
-
-
-### Improvements:
-
-* implement ash lifecycle tasks
-
-## [v1.3.48](https://github.com/ash-project/ash_postgres/compare/v1.3.47...v1.3.48) (2023-09-04)
-
-
-
-
-### Improvements:
-
-* better error message for missing table config
-
-## [v1.3.47](https://github.com/ash-project/ash_postgres/compare/v1.3.46...v1.3.47) (2023-08-31)
-
-
-
-
-### Bug Fixes:
-
-* ensure we always select at least one field, and change one field
-
-## [v1.3.46](https://github.com/ash-project/ash_postgres/compare/v1.3.45...v1.3.46) (2023-08-31)
-
-
-
-
-### Bug Fixes:
-
-* use provided values for updates
-
-## [v1.3.45](https://github.com/ash-project/ash_postgres/compare/v1.3.44...v1.3.45) (2023-08-31)
-
-
-
-
-### Bug Fixes:
-
-* don't clobber loaded data on update
-
-## [v1.3.44](https://github.com/ash-project/ash_postgres/compare/v1.3.43...v1.3.44) (2023-08-31)
-
-
-
-
-### Bug Fixes:
-
-* properly handle ensure nsted calls to `get_path` are jsonb
-
-### Improvements:
-
-* support atomics (#165)
-
-## [v1.3.43](https://github.com/ash-project/ash_postgres/compare/v1.3.42...v1.3.43) (2023-08-22)
-
-
-
-
-### Bug Fixes:
-
-* properly provide constraints on all type casting
-
-## [v1.3.42](https://github.com/ash-project/ash_postgres/compare/v1.3.41...v1.3.42) (2023-08-22)
-
-
-
-
-### Bug Fixes:
-
-* support non-atom named aggregates
-
-* handle case where multiple grouped aggregates depend on further aggregates
-
-### Improvements:
-
-* support in-line aggregates
-
-* specify @behaviour in AshPostgres.Type
-
-* add `value_to_postgres_default/3` and `AshPostgres.Type`
-
-* handle non-cast-in-type queries
-
-## [v1.3.41](https://github.com/ash-project/ash_postgres/compare/v1.3.40...v1.3.41) (2023-08-08)
-
-
-
-
-### Bug Fixes:
-
-* handle interaction between distinct, join filters and sort
-
-### Improvements:
-
-* custom-extension implementation (#162)
-
-* custom-extension implementation
-
-* allow adding custom-extension by module's reference and fixes formatting
-
-* support new `from_many?` option
-
-* subquery after distinct to handle distinct
-
-## [v1.3.40](https://github.com/ash-project/ash_postgres/compare/v1.3.39...v1.3.40) (2023-08-01)
-
-
-
-
-### Bug Fixes:
-
-* properly detect optimizable first aggregates
-
-## [v1.3.39](https://github.com/ash-project/ash_postgres/compare/v1.3.38...v1.3.39) (2023-08-01)
-
-
-
-
-### Bug Fixes:
-
-* properly alter deferrability on attribute alter
-
-### Improvements:
-
-* update ash
-
-* handle empty maps in migration defaults automatically
-
-* handle empty lists in migraiton defaults automatically
-
-* apply sort in subqueries properly
-
-* handle `no_attributes?` better in more places
-
-* support the new `parent/1` expr in relationships
-
-* explicitly lock the source row
-
-## [v1.3.38](https://github.com/ash-project/ash_postgres/compare/v1.3.37...v1.3.38) (2023-07-21)
-
-
-
-
-### Bug Fixes:
-
-* un-break aggregates referencing calculations
-
-### Improvements:
-
-* properly handle context for referenced calculations
-
-## [v1.3.37](https://github.com/ash-project/ash_postgres/compare/v1.3.36...v1.3.37) (2023-07-19)
-
-
-
-
-### Improvements:
-
-* support new `distinct_sort` option
-
-## [v1.3.36](https://github.com/ash-project/ash_postgres/compare/v1.3.35...v1.3.36) (2023-07-19)
-
-
-
-
-### Bug Fixes:
-
-* type casting improvements, handle manual relationships in `exists`
-
-* protected names in conflict_target (#158)
-
-## [v1.3.35](https://github.com/ash-project/ash_postgres/compare/v1.3.34...v1.3.35) (2023-07-18)
-
-
-
-
-### Improvements:
-
-* support new `distinct` features from ash core
-
-## [v1.3.34](https://github.com/ash-project/ash_postgres/compare/v1.3.33...v1.3.34) (2023-07-18)
-
-
-
-
-### Improvements:
-
-* support unary `-/1` operator
-
-## [v1.3.33](https://github.com/ash-project/ash_postgres/compare/v1.3.32...v1.3.33) (2023-07-14)
-
-
-
-
-### Bug Fixes:
-
-* convert `Ash.Resource.Aggregate` to `Ash.Query.Aggregate` when adding
-
-### Improvements:
-
-* support `deferrable` option in migration generator
-
-* support `exists` aggregates
-
-## [v1.3.32](https://github.com/ash-project/ash_postgres/compare/v1.3.31...v1.3.32) (2023-07-12)
-
-
-
-
-### Improvements:
-
-* support `at/2` expression
-
-## [v1.3.31](https://github.com/ash-project/ash_postgres/compare/v1.3.30...v1.3.31) (2023-07-12)
-
-
-
-
-### Bug Fixes:
-
-* raise better error on invalid filter values
-
-* Fixes multiple schema identities migrations (#156)
-
-* fix Logger deprecations for elixir 1.15 (#155)
-
-* interpolate table names with `inspect` in generated migrations (#152)
-
-### Improvements:
-
-* better `ash_functions` message
-
-* support `string_split`
-
-* add postgres expressions guide
-
-* add `simple_join_first_aggregates` option
-
-## [v1.3.30](https://github.com/ash-project/ash_postgres/compare/v1.3.29...v1.3.30) (2023-06-06)
-
-
-
-
-### Bug Fixes:
-
-* handle changing custom index names better
-
-* validate custom index names
-
-## [v1.3.29](https://github.com/ash-project/ash_postgres/compare/v1.3.28...v1.3.29) (2023-06-05)
-
-
-
-
-### Bug Fixes:
-
-* properly handle nested aggregate references
-
-## [v1.3.28](https://github.com/ash-project/ash_postgres/compare/v1.3.27...v1.3.28) (2023-05-23)
-
-
-
-
-### Bug Fixes:
-
-* handle raised errors in bulk actions
-
-## [v1.3.27](https://github.com/ash-project/ash_postgres/compare/v1.3.26...v1.3.27) (2023-05-17)
-
-
-
-
-### Improvements:
-
-* raise better errors on conflicting locks
-
-## [v1.3.26](https://github.com/ash-project/ash_postgres/compare/v1.3.25...v1.3.26) (2023-05-16)
-
-
-
-
-### Bug Fixes:
-
-* use proper lock list again
-
-* use proper list of row level locks
-
-* check `changeset.action_type` not `changeset.action.type`
-
-### Improvements:
-
-* support more lock types
-
-## [v1.3.25](https://github.com/ash-project/ash_postgres/compare/v1.3.24...v1.3.25) (2023-05-08)
-
-
-
-
-### Improvements:
-
-* support changeset.filters (for optimistic locking)
-
-## [v1.3.24](https://github.com/ash-project/ash_postgres/compare/v1.3.23...v1.3.24) (2023-05-03)
-
-
-
-
-### Improvements:
-
-* support bulk upserts
-
-## [v1.3.23](https://github.com/ash-project/ash_postgres/compare/v1.3.22...v1.3.23) (2023-05-01)
-
-
-
-
-### Bug Fixes:
-
-* don't incorrectly mark references as primary key references
-
-* go back to old migration sorting algorithm
-
-## [v1.3.22](https://github.com/ash-project/ash_postgres/compare/v1.3.21...v1.3.22) (2023-04-28)
-
-
-
-
-### Improvements:
-
-* support locking
-
-## [v1.3.21](https://github.com/ash-project/ash_postgres/compare/v1.3.20...v1.3.21) (2023-04-27)
-
-
-
-
-### Improvements:
-
-* handle new spark versions better, more explicit snapshots
-
-## [v1.3.20](https://github.com/ash-project/ash_postgres/compare/v1.3.19...v1.3.20) (2023-04-22)
-
-
-
-
-### Bug Fixes:
-
-* subquery aggregates when a distinct is being added
-
-* don't call `.table` on `nil`
-
-* wrap `datetime_add` in parenthesis
-
-* handle primary key changes properly
-
-### Improvements:
-
-* update ash
-
-* don't call `.table` on `nil` `snapshot`
-
-* use digraph for operation ordering
-
-## [v1.3.19](https://github.com/ash-project/ash_postgres/compare/v1.3.18...v1.3.19) (2023-04-07)
-
-
-
-
-### Bug Fixes:
-
-* properly handle newtypes, add test
-
-* honor newtypes when determining migration type
-
-* handle nil ash_functions_version in another place
-
-* handle nil ash_functions_version
-
-### Improvements:
-
-* update ash
-
-## [v1.3.18](https://github.com/ash-project/ash_postgres/compare/v1.3.17...v1.3.18) (2023-03-23)
-
-
-
-
-## [v1.3.17](https://github.com/ash-project/ash_postgres/compare/v1.3.16...v1.3.17) (2023-03-20)
-
-
-
-
-### Bug Fixes:
-
-* properly map `parent` bindings in `exists`
-
-## [v1.3.16](https://github.com/ash-project/ash_postgres/compare/v1.3.15...v1.3.16) (2023-03-03)
-
-
-
-
-### Improvements:
-
-* support new date expressions
-
-## [v1.3.15](https://github.com/ash-project/ash_postgres/compare/v1.3.14...v1.3.15) (2023-02-23)
-
-
-
-
-### Improvements:
-
-* add aggregates used by sorts
-
-## [v1.3.14](https://github.com/ash-project/ash_postgres/compare/v1.3.13...v1.3.14) (2023-02-21)
-
-
-
-
-### Improvements:
-
-* Implement string_join expr (#132)
-
-## [v1.3.13](https://github.com/ash-project/ash_postgres/compare/v1.3.12...v1.3.13) (2023-02-17)
-
-
-
-
-### Bug Fixes:
-
-* don't use `:distinct` when `uniq?` is not `true`
-
-## [v1.3.12](https://github.com/ash-project/ash_postgres/compare/v1.3.11...v1.3.12) (2023-02-16)
-
-
-
-
-### Bug Fixes:
-
-* exclude `order_by` when building aggregates
-
-## [v1.3.11](https://github.com/ash-project/ash_postgres/compare/v1.3.10...v1.3.11) (2023-02-16)
-
-
-
-
-### Bug Fixes:
-
-* properly find migration directories in umbrella apps
-
-* don't double-cast to array for list aggregates
-
-### Improvements:
-
-* significantly optimize aggregate queries
-
-* better type casting for concat operator
-
-## [v1.3.10](https://github.com/ash-project/ash_postgres/compare/v1.3.9...v1.3.10) (2023-02-09)
-
-
-
-
-### Bug Fixes:
-
-* sorting on optimized first aggregates
-
-## [v1.3.9](https://github.com/ash-project/ash_postgres/compare/v1.3.8...v1.3.9) (2023-02-09)
-
-
-
-
-### Bug Fixes:
-
-* do limit/offset outside of query if distinct is required
-
-* load by __order__ ascending
-
-### Improvements:
-
-* support new `uniq?` option on count/list aggregates
-
-* optimized `first` aggregates where possible
-
-## [v1.3.8](https://github.com/ash-project/ash_postgres/compare/v1.3.7...v1.3.8) (2023-02-06)
-
-
-
-
-### Bug Fixes:
-
-* Actually use `AshPostgres.Repo` behaviour (#129)
-
-### Improvements:
-
-* authorization filters are now attached by ash core
-
-## [v1.3.7](https://github.com/ash-project/ash_postgres/compare/v1.3.6...v1.3.7) (2023-02-06)
-
-
-
-
-### Bug Fixes:
-
-* Actually use `AshPostgres.Repo` behaviour (#129)
-
-### Improvements:
-
-* authorization filters are now attached by ash core
-
-## [v1.3.6](https://github.com/ash-project/ash_postgres/compare/v1.3.5...v1.3.6) (2023-02-03)
-
-
-
-
-### Bug Fixes:
-
-* properly set next migration name
-
-* override `insert` function for proper ecto interop
-
-### Improvements:
-
-* add `migration_ignore_attributes`
-
-## [v1.3.5](https://github.com/ash-project/ash_postgres/compare/v1.3.4...v1.3.5) (2023-01-29)
-
-
-
-
-### Bug Fixes:
-
-* properly convert to/from ecto, only when necessary
-
-## [v1.3.4](https://github.com/ash-project/ash_postgres/compare/v1.3.3...v1.3.4) (2023-01-28)
-
-
-
-
-### Bug Fixes:
-
-* support latest ecto interop changes in ash core
-
-### Improvements:
-
-* properly cast division to floats for elixir-y behavior
-
-* support for dynamically set repo
-
-* update ash
-
-## [v1.3.3](https://github.com/ash-project/ash_postgres/compare/v1.3.2...v1.3.3) (2023-01-18)
-
-
-
-
-### Improvements:
-
-* update to new docs patterns
-
-## [v1.3.2](https://github.com/ash-project/ash_postgres/compare/v1.3.1...v1.3.2) (2023-01-17)
-
-
-
-
-### Bug Fixes:
-
-* nest subqueries when required for distinct
-
-* replace `{:in, ...}` type with `{:array, ...}`
-
-## [v1.3.1](https://github.com/ash-project/ash_postgres/compare/v1.3.0...v1.3.1) (2023-01-11)
-
-
-
-
-### Bug Fixes:
-
-* allow for non attribute aggregate references for first/list
-
-## [v1.3.0](https://github.com/ash-project/ash_postgres/compare/v1.3.0-rc.4...v1.3.0) (2023-01-11)
-
-
-
-
-### Improvements:
-
-* update to latest ash
-
-## [v1.3.0-rc.4](https://github.com/ash-project/ash_postgres/compare/v1.3.0-rc.3...v1.3.0-rc.4) (2023-01-09)
-
-
-
-
-### Bug Fixes:
-
-* properly join to all required relationships
-
-## [v1.3.0-rc.3](https://github.com/ash-project/ash_postgres/compare/v1.3.0-rc.2...v1.3.0-rc.3) (2023-01-09)
-
-
-
-
-### Bug Fixes:
-
-* properly type cast in fragments (and elsewhere)
-
-## [v1.3.0-rc.2](https://github.com/ash-project/ash_postgres/compare/v1.3.0-rc.1...v1.3.0-rc.2) (2023-01-06)
-
-
-
-
-### Bug Fixes:
-
-* undo changes that caused type casting bugs
-
-## [v1.3.0-rc.1](https://github.com/ash-project/ash_postgres/compare/v1.3.0-rc.0...v1.3.0-rc.1) (2023-01-06)
-
-
-
-
-### Bug Fixes:
-
-* undo changes that caused type casting bugs
-
-## [v1.3.0-rc.1](https://github.com/ash-project/ash_postgres/compare/v1.3.0-rc.0...v1.3.0-rc.1) (2023-01-06)
-
-
-
-
-### Bug Fixes:
-
-* use `parent_expr` instead of `this`
-
-* various expression & type building fixes
-
-## [v1.3.0-rc.0](https://github.com/ash-project/ash_postgres/compare/v1.2.6...v1.3.0-rc.0) (2023-01-04)
+## [v2.14.0](https://github.com/ash-project/ash_postgres/compare/v2.13.1...v2.14.0) (2026-10-03)
 
 
 
 
 ### Features:
 
-* support latest ash
+* Add timestamptz option (#874) by Joseph Tolley
+
+* add temporal features by Zach Daniel
 
 ### Bug Fixes:
 
-* honor calculation constraints
+* convert a character_not_in_repertoire error to an invalid-class error (#866) by grempe
 
-* handle lists with expressions inside
+* convert DBConnection.EncodeError to an invalid-class error (#863) by grempe
 
-### Improvements:
+* convert Ecto.Query.CastError on every query path (#864) by grempe
 
-* support calc constraints
+* make ash_required standalone and actually use it by Zach Daniel
 
-* support new `cast_in_query?/2`
+* add more type signatures for like/ilike by Zach Daniel
 
-* support calculations as aggregate targets
+* add `view? true` option to support not returning `xmax` by Zach Daniel
 
-## [v1.2.6](https://github.com/ash-project/ash_postgres/compare/v1.2.5...v1.2.6) (2022-12-27)
+* properly merge check constraints/base filters by Zach Daniel
 
+* order no_phase operations after the objects they act on (#848) by Aaron Paterson
 
-
-
-### Bug Fixes:
-
-* properly set `migrations_path` default in umbrellas
-
-* don't subquery unless we have to
-
-## [v1.2.5](https://github.com/ash-project/ash_postgres/compare/v1.2.4...v1.2.5) (2022-12-21)
+## [v2.13.1](https://github.com/ash-project/ash_postgres/compare/v2.13.0...v2.13.1) (2026-09-08)
 
 
 
 
 ### Bug Fixes:
 
-* don't group aggregates that reference relationships in their filters
+* don't use `merge` for upserts by Zach Daniel
 
-* properly skip unique indexes when configured
-
-### Improvements:
-
-* add like and ilike
-
-## [v1.2.4](https://github.com/ash-project/ash_postgres/compare/v1.2.3...v1.2.4) (2022-12-18)
-
-
-
-
-### Bug Fixes:
-
-* properly add aggregates to query when referenced from calculations
-
-### Improvements:
-
-* distinct on source of query, not relationship destination
-
-## [v1.2.3](https://github.com/ash-project/ash_postgres/compare/v1.2.2...v1.2.3) (2022-12-15)
-
-
-
-
-### Bug Fixes:
-
-* properly combine sort + to many join filter
-
-## [v1.2.2](https://github.com/ash-project/ash_postgres/compare/v1.2.1...v1.2.2) (2022-12-15)
-
-
-
-
-### Improvements:
-
-* udpate to latest ash, fix array issues
-
-## [v1.2.1](https://github.com/ash-project/ash_postgres/compare/v1.2.0...v1.2.1) (2022-12-13)
-
-
-
-
-### Bug Fixes:
-
-* pattern match error in `lazy_non_matching_defaults/1`
-
-* use attribute name not attribute for default funs
-
-* *actually* fix `default_fun` upserts
-
-* fix upserting update_defaults
-
-## [v1.2.0](https://github.com/ash-project/ash_postgres/compare/v1.2.0-rc.1...v1.2.0) (2022-12-13)
-
-
-
-
-### Bug Fixes:
-
-* make migration generator work better for umbrellas
-
-## [v1.2.0-rc.1](https://github.com/ash-project/ash_postgres/compare/v1.2.0-rc.0...v1.2.0-rc.1) (2022-12-10)
-
-
-
-
-### Bug Fixes:
-
-* don't make migration generation recursive
-
-* nevermind, can't make migrate recursive
-
-### Improvements:
-
-* make migrate task recursive as well
-
-* mark generate_migrations as recursive for umbrellas
-
-## [v1.2.0-rc.0](https://github.com/ash-project/ash_postgres/compare/v1.1.3...v1.2.0-rc.0) (2022-12-10)
+## [v2.13.0](https://github.com/ash-project/ash_postgres/compare/v2.12.0...v2.13.0) (2026-08-30)
 
 
 
 
 ### Features:
 
-* avg/min/max/custom aggregate support
-
-### Bug Fixes:
-
-* various broken behavior from new aggregate work
-
-* forgot a
-
-* fix various problems with the model behind aggregates
-
-* properly set binding names for many to many join filters
+* store a range in a native Postgres range column (#818) by Matt Beanland
 
 ### Improvements:
 
-* better error messages from mix tasks
-
-* validate that references refer to relationships
-
-* avg/min/max/custom aggregate support
-
-* upgrade and depend on ash version
-
-* fix lateral many to many joins
-
-* inform users about postgres incompatibility with multidimensional arrays
-
-## [v1.1.3](https://github.com/ash-project/ash_postgres/compare/v1.1.2...v1.1.3) (2022-12-01)
-
-
-
+* teach the Postgrex types module a :duration attribute needs (#815) by Matt Beanland
 
 ### Bug Fixes:
 
-* properly turn custom index keys into atoms
+* raise on a failed tenant rename instead of silently returning :ok (CVE-2026-78699) by Zach Daniel
 
-### Improvements:
+* update ltree casting failure mode by Zach Daniel
 
-* update ash, add test for transaction hooks
+* tighten tenant validation by Zach Daniel
 
-* support new transaction info with hooks
+* run tenant migrations from mix ash.setup (#836) by TravelCurry02
 
-* add unique constraints to changeset for custom unique indexes
+* only await table structure for custom statement dependencies (#826) by Alt-iOS
 
-* separate out concurrent index creations and do them in a separate transaction
+* do not KeyError when Postgres omits DETAIL on a constraint violation (#824) by Michael Kuk
 
-## [v1.1.2](https://github.com/ash-project/ash_postgres/compare/v1.1.1...v1.1.2) (2022-11-21)
-
-
-
-
-### Bug Fixes:
-
-* don't use hard-coded join assoc name (#118)
-
-### Improvements:
-
-* add `migration_defaults` for customizing default values
-
-## [v1.1.1](https://github.com/ash-project/ash_postgres/compare/v1.1.0...v1.1.1) (2022-10-25)
-
-
-
-
-### Bug Fixes:
-
-* && operator in expressions to point to ash_elixir_and (#115)
-
-### Improvements:
-
-* add check for unsupported expression
-
-## [v1.1.0](https://github.com/ash-project/ash_postgres/compare/v1.0.0...v1.1.0) (2022-10-20)
+## [v2.12.0](https://github.com/ash-project/ash_postgres/compare/v2.11.0...v2.12.0) (2026-08-14)
 
 
 
 
 ### Features:
 
-* support `now()` in latest Ash
+* add match_tenant? option for attribute multitenancy FKs (#813) by TravelCurry02
 
-## [v1.0.0](https://github.com/ash-project/ash_postgres/compare/v0.43.0...v1.0.0) (2022-10-17)
+* add after_resource to custom_statements so raw SQL can depend on another resource (#799) by Jechol Lee
 
+### Improvements:
+
+* replace pairwise operation ordering with a dependency-graph topological sort (#798) by Jechol Lee
 
 ### Bug Fixes:
 
-* no unnecessary type cast on count/sum aggregates
+* return upsert identity keys and correlate on the full key set so bulk upserts don't drop by Daniel Gollings
 
-* don't apply `filter` to `array_agg`
+* clean up obsolete serial sequences (#806) by Jechol Lee
 
-### Improvements:
+* fix ordering constraints for composite primary keys by Zach Daniel
 
-* update to Ash 2.0
-
-* handle UUID types better
-
-* set lateral join source for latest ash
-
-* use `prepend?: true` option when applying relationship sorts
-
-## [v1.0.0-rc.9](https://github.com/ash-project/ash_postgres/compare/v1.0.0-rc.8...v1.0.0-rc.9) (2022-10-07)
-
-
-
-
-### Bug Fixes:
-
-* handle custom calculation selects properly
-
-* use attribute source for identity fields
-
-### Improvements:
-
-* update to the latest ash
-
-* remove the need to dynamically expand fragments
-
-* when casting string to uuid, dump to binary
-
-* update to latest ash
-
-## [v1.0.0-rc.8](https://github.com/ash-project/ash_postgres/compare/v1.0.0-rc.7...v1.0.0-rc.8) (2022-09-29)
-
-
-
-
-### Bug Fixes:
-
-* never attempt to group custom operations
-
-* wrap case statement in parens
-
-### Improvements:
-
-* `exists` filters necessitate multiple aggregate joins (for now)
-
-## [v1.0.0-rc.7](https://github.com/ash-project/ash_postgres/compare/v1.0.0-rc.6...v1.0.0-rc.7) (2022-09-28)
-
-
-
-
-### Bug Fixes:
-
-* properly type cast top level fragments
-
-### Improvements:
-
-* update to the latest ash
-
-* upgrade to new `exists` usage
-
-## [v1.0.0-rc.6](https://github.com/ash-project/ash_postgres/compare/v1.0.0-rc.5...v1.0.0-rc.6) (2022-09-21)
-
-
-
-
-### Improvements:
-
-* support latest ash
-
-## [v1.0.0-rc.5](https://github.com/ash-project/ash_postgres/compare/v1.0.0-rc.4...v1.0.0-rc.5) (2022-09-15)
-
-
-
-
-### Improvements:
-
-* update to latest ash
-
-* implement Length function (#111)
-
-* upgrade to latest ash
-
-## [v1.0.0-rc.4](https://github.com/ash-project/ash_postgres/compare/v1.0.0-rc.3...v1.0.0-rc.4) (2022-09-14)
-
-
-
-
-### Improvements:
-
-* support latest ash
-
-* support manual relationships with joins
-
-## [v1.0.0-rc.3](https://github.com/ash-project/ash_postgres/compare/v1.0.0-rc.2...v1.0.0-rc.3) (2022-09-12)
-
-
-
-
-### Bug Fixes:
-
-* keep unique index keys in order in migrations
-
-## [v1.0.0-rc.2](https://github.com/ash-project/ash_postgres/compare/v1.0.0-rc.1...v1.0.0-rc.2) (2022-09-06)
-
-
-
-
-### Improvements:
-
-* support latest ash `exists/2` expr
-
-## [v1.0.0-rc.1](https://github.com/ash-project/ash_postgres/compare/v1.0.0-rc.0...v1.0.0-rc.1) (2022-09-04)
-
-
-
-
-## [v0.43.0](https://github.com/ash-project/ash_postgres/compare/v0.42.0-rc.7...v0.43.0) (2022-08-05)
-
-
-
-
-### Bug Fixes:
-
-* properly order check constraints
-
-* remove check constraints before adding them
-
-### Improvements:
-
-* fix typecasting for calculations & embed access
-
-* add custom_statements to migration generator
-
-* support `||` and `&&`
-
-## [v0.42.0-rc.7](https://github.com/ash-project/ash_postgres/compare/v0.42.0-rc.6...v0.42.0-rc.7) (2022-07-14)
+## [v2.11.0](https://github.com/ash-project/ash_postgres/compare/v2.10.0...v2.11.0) (2026-07-22)
 
 
 
 
 ### Features:
 
-* support `cast_in_query?/0` and `source`
+* allow custom indexes to exclude base filters (#796) by Jechol Lee
 
 ### Bug Fixes:
 
-* use new doc_index patterns
+* fix generated reference type value for identity and bigserial (#800) by Dmitry Maganov
 
-* support upsert_identity with base_filter
+* return skipped upserts with nil identity values (#794) by Jechol Lee
 
-* support upsert_identity with base filters
+* warn when resources are skipped due to migrate?: false during miâ¦ (#792) by Jsime34
 
-* handle various join bugs
+* set tenant on destroy so exists() subqueries resolve against the tenant schema (#790) by Francisco-Castro
 
-* use attribute.name if attribute.source is nil
+* resolve actor/context templates in through relationship filters (#789) by Barnabas Jovanovics
 
-* set attribute source properly
+* correlate bulk upsert records by identity on the MERGE path (#786) by Johannes Welebil
 
-* ensure source is always set on attributes in snapshots
-
-* handle paths for aggregates w/ > 2 relationships
-
-* rename attributes correctly in down migration (#98)
-
-* don't generate modify commands for attributes due to schema changes
-
-* default schema to primary schema
-
-* test and confirm behavior of schemas
-
-* use correct bindings for filtered relationships
-
-* cast calcs in query expressions
-
-* explicitly type cast aggregate/calc selects
-
-* don't try and match reference schema to table schema
-
-* don't use `table` where we should use `schema` in migration generator
-
-* handle combinations of distinct & sort
-
-* ensure all single actions are explicitly marked as primary? (#95)
-
-* only rename schema when necessary
-
-* inspect un-defaultable value in error message
-
-* select custom aggregates properly
-
-* don't add reference when renaming column if unnecessary
-
-* don't cast `nil` to `""`
-
-* `!is_atom/1` -> `!is_boolean/1`
-
-* sanitize lists to stringify atoms
-
-* cast embedded atoms to strings first
-
-* don't cast `{:in, :any}` types
-
-* more don't cast any types
-
-* don't cast if there is no type
-
-* properly handle relationship filter bindings
-
-* don't consider fields changed with only source -> name changes
-
-* handle name -> source change in more places
-
-* handle name -> source rename in operation ordering
-
-* fix aggregate/base filters
-
-* don't select more fields than necessary
-
-* don't call `ecto_type` twice when resolving types
-
-* place expressions in the proper order in selects
-
-* match on count in expr
-
-* remove incorrect param count tracking
-
-* properly track param count
-
-* properly reverse parameters before/after expansion
-
-* don't use the base ecto type
-
-* don't sort when joining
-
-* ensure repo is compiled (#80)
-
-* properly construct nested join relationships
-
-* use `CiStringWrapper` type in ash_postgres
-
-* ensure we are returning * on upserts (#79)
-
-* handle new if types
-
-* copy query prefix to newly created query (#74)
+* ensure timeouts applied at repo level (#784) by torazar
 
 ### Improvements:
 
-* add default guide, and empty ash postgres guide
+* Add partial index conditions for references (#795) by Jechol Lee
 
-* set `update_defaults` on upsert results
+* avoid generating uuidv7 by default, once postgres v18 is detected (#793) by Luca Venir
 
-* handle fallback ecto migration default elegantly (#94)
+* Added sort direction support to custom_indexes fields.  (#775) by Thomas Lucas
 
-* add `ignore?` option to `references`
-
-* check_migrations, rename to `--check`
-
-* add explicit timeout capability declaration
-
-* add static schema specification in DSL
-
-* support static schema specification in migration generator
-
-* implement decimal ecto migration default (#91)
-
-* support float as Ecto migration default (#89)
-
-* update ecto
-
-* add atom impl for `EctoMigrationDefault`
-
-* Add EctoMigrationDefault protocol and implement defaults (#87)
-
-* update ecto, fix dialyzer
-
-* support new timeouts
-
-* make select unique before running query
-
-* add doc_index
-
-* add exclusion_constraint_names (#83)
-
-* support referencing aggregates from aggregate filters
-
-* support access syntax
-
-* don't upsert defaults on conflict (#77)
-
-* relax ash version requirement
-
-* add custom migration types, and repo level override
-
-* update to latest version of ash
-
-## [v0.42.0-rc.6](https://github.com/ash-project/ash_postgres/compare/v0.42.0-rc.5...v0.42.0-rc.6) (2022-07-10)
+## [v2.10.0](https://github.com/ash-project/ash_postgres/compare/v2.9.1...v2.10.0) (2026-06-14)
 
 
 
 
 ### Features:
 
-* support `cast_in_query?/0` and `source`
+* add `update_many` callback by Zach Daniel
 
 ### Bug Fixes:
 
-* use new doc_index patterns
+* Filter out empty snapshot directories (#765) by Rutgerdj
 
-* support upsert_identity with base_filter
+* move table schema migrations (#758) by febarnett3
 
-* support upsert_identity with base filters
+* rewrite belongs_to reference indexes when multitenancy changes (#762) by Jinkyou Son
 
-* handle various join bugs
+* handle skipped references and delete constraint errors (#759) by ChivukulaVirinchi
 
-* use attribute.name if attribute.source is nil
+* ignore migrate false resources in drop detection (#757) by ChivukulaVirinchi
 
-* set attribute source properly
-
-* ensure source is always set on attributes in snapshots
-
-* handle paths for aggregates w/ > 2 relationships
-
-* rename attributes correctly in down migration (#98)
-
-* don't generate modify commands for attributes due to schema changes
-
-* default schema to primary schema
-
-* test and confirm behavior of schemas
-
-* use correct bindings for filtered relationships
-
-* cast calcs in query expressions
-
-* explicitly type cast aggregate/calc selects
-
-* don't try and match reference schema to table schema
-
-* don't use `table` where we should use `schema` in migration generator
-
-* handle combinations of distinct & sort
-
-* ensure all single actions are explicitly marked as primary? (#95)
-
-* only rename schema when necessary
-
-* inspect un-defaultable value in error message
-
-* select custom aggregates properly
-
-* don't add reference when renaming column if unnecessary
-
-* don't cast `nil` to `""`
-
-* `!is_atom/1` -> `!is_boolean/1`
-
-* sanitize lists to stringify atoms
-
-* cast embedded atoms to strings first
-
-* don't cast `{:in, :any}` types
-
-* more don't cast any types
-
-* don't cast if there is no type
-
-* properly handle relationship filter bindings
-
-* don't consider fields changed with only source -> name changes
-
-* handle name -> source change in more places
-
-* handle name -> source rename in operation ordering
-
-* fix aggregate/base filters
-
-* don't select more fields than necessary
-
-* don't call `ecto_type` twice when resolving types
-
-* place expressions in the proper order in selects
-
-* match on count in expr
-
-* remove incorrect param count tracking
-
-* properly track param count
-
-* properly reverse parameters before/after expansion
-
-* don't use the base ecto type
-
-* don't sort when joining
-
-* ensure repo is compiled (#80)
-
-* properly construct nested join relationships
-
-* use `CiStringWrapper` type in ash_postgres
-
-* ensure we are returning * on upserts (#79)
-
-* handle new if types
-
-* copy query prefix to newly created query (#74)
+* place atomics in binding `1`, not `0` by Zach Daniel
 
 ### Improvements:
 
-* set `update_defaults` on upsert results
+* Implement upserts with MERGE (17+) by Zach Daniel
 
-* handle fallback ecto migration default elegantly (#94)
+* Warning for reviewing operations (#777) by colenelson0
 
-* add `ignore?` option to `references`
+* add more generic table renaming by Zach Daniel
 
-* check_migrations, rename to `--check`
+* Add migrate_extensions? callback to allow repos to opt out of extension migrations (#761) by gixtrem
 
-* add explicit timeout capability declaration
+* allow specifying global vs private statements (#751) by CyanideDragon
 
-* add static schema specification in DSL
+* ash_postgres.gen.resources: many-to-many, views, no-PK tables, and prompt UX (#748) by Johannes Welebil
 
-* support static schema specification in migration generator
+## [v2.9.1](https://github.com/ash-project/ash_postgres/compare/v2.9.0...v2.9.1) (2026-05-01)
 
-* implement decimal ecto migration default (#91)
 
-* support float as Ecto migration default (#89)
 
-* update ecto
 
-* add atom impl for `EctoMigrationDefault`
+### Bug Fixes:
 
-* Add EctoMigrationDefault protocol and implement defaults (#87)
+* handle base filter index rewrite detection (#742) by Minsub Kim
 
-* update ecto, fix dialyzer
+* failing test for calculation loading on relationships in policies (#741) by Rutgerdj
 
-* support new timeouts
+* immutable_expr_error support for newly added required expr (#737) by adamtharani
 
-* make select unique before running query
+* correct prefix name when loading many_to_many relationships (#736) by gcugnet
 
-* add doc_index
-
-* add exclusion_constraint_names (#83)
-
-* support referencing aggregates from aggregate filters
-
-* support access syntax
-
-* don't upsert defaults on conflict (#77)
-
-* relax ash version requirement
-
-* add custom migration types, and repo level override
-
-* update to latest version of ash
-
-## [v0.42.0-rc.5](https://github.com/ash-project/ash_postgres/compare/v0.42.0-rc.4...v0.42.0-rc.5) (2022-07-06)
+## [v2.9.0](https://github.com/ash-project/ash_postgres/compare/v2.8.0...v2.9.0) (2026-04-12)
 
 
 
 
 ### Features:
 
-* support `cast_in_query?/0` and `source`
+* relationship through (#686) by Kenneth Kostrešević
+
+* add support for `:identity` types  (#715) by Jatanasio
+
+* add native_in/2 function for SQL IN (...) syntax (#728) by jkreddy020203
+
+* Drop tables on missing resources & table name change handling (#713) by obviouslyweb
 
 ### Bug Fixes:
 
-* support upsert_identity with base_filter
+* Add missing usage_rules files to hex package (#733) by Philip Munksgaard
 
-* support upsert_identity with base filters
+* ensure proper ordering when dropping orphan tables (#730) by Jechol Lee
 
-* handle various join bugs
+* sort snapshot JSON keys when recording drop_table opt-out (#729) by Jechol Lee
 
-* use attribute.name if attribute.source is nil
+* sort AddUniqueIndex after CreateTable and all AddAttribute ops by Zach Daniel
 
-* set attribute source properly
+* ensure split migrations get unique names and modules by Zach Daniel
 
-* ensure source is always set on attributes in snapshots
+* properly sequence items that depend on concurrent migrations by Zach Daniel
 
-* handle paths for aggregates w/ > 2 relationships
+* Fix/236 unique index before self fk (#705) by WillG2001
 
-* rename attributes correctly in down migration (#98)
+* show warning on concurrent index multitenancy #610 (#711) by Ryland Bangerter
 
-* don't generate modify commands for attributes due to schema changes
-
-* default schema to primary schema
-
-* test and confirm behavior of schemas
-
-* use correct bindings for filtered relationships
-
-* cast calcs in query expressions
-
-* explicitly type cast aggregate/calc selects
-
-* don't try and match reference schema to table schema
-
-* don't use `table` where we should use `schema` in migration generator
-
-* handle combinations of distinct & sort
-
-* ensure all single actions are explicitly marked as primary? (#95)
-
-* only rename schema when necessary
-
-* inspect un-defaultable value in error message
-
-* select custom aggregates properly
-
-* don't add reference when renaming column if unnecessary
-
-* don't cast `nil` to `""`
-
-* `!is_atom/1` -> `!is_boolean/1`
-
-* sanitize lists to stringify atoms
-
-* cast embedded atoms to strings first
-
-* don't cast `{:in, :any}` types
-
-* more don't cast any types
-
-* don't cast if there is no type
-
-* properly handle relationship filter bindings
-
-* don't consider fields changed with only source -> name changes
-
-* handle name -> source change in more places
-
-* handle name -> source rename in operation ordering
-
-* fix aggregate/base filters
-
-* don't select more fields than necessary
-
-* don't call `ecto_type` twice when resolving types
-
-* place expressions in the proper order in selects
-
-* match on count in expr
-
-* remove incorrect param count tracking
-
-* properly track param count
-
-* properly reverse parameters before/after expansion
-
-* don't use the base ecto type
-
-* don't sort when joining
-
-* ensure repo is compiled (#80)
-
-* properly construct nested join relationships
-
-* use `CiStringWrapper` type in ash_postgres
-
-* ensure we are returning * on upserts (#79)
-
-* handle new if types
-
-* copy query prefix to newly created query (#74)
+* raise error when reference is configured for non-belongs_to relationship (#712) by henryzhan013
 
 ### Improvements:
 
-* set `update_defaults` on upsert results. For most users, this means that where previously `updated_at` would not get set on an upsert that ultimately resulted in an update, it will now.
+* Add required!/1, ash_required/1, and ash_required!/2 (issue #261) (#707) by dallingson
 
-* handle fallback ecto migration default elegantly (#94)
-
-* add `ignore?` option to `references`
-
-* check_migrations, rename to `--check`
-
-* add explicit timeout capability declaration
-
-* add static schema specification in DSL
-
-* support static schema specification in migration generator
-
-* implement decimal ecto migration default (#91)
-
-* support float as Ecto migration default (#89)
-
-* update ecto
-
-* add atom impl for `EctoMigrationDefault`
-
-* Add EctoMigrationDefault protocol and implement defaults (#87)
-
-* update ecto, fix dialyzer
-
-* support new timeouts
-
-* make select unique before running query
-
-* add doc_index
-
-* add exclusion_constraint_names (#83)
-
-* support referencing aggregates from aggregate filters
-
-* support access syntax
-
-* don't upsert defaults on conflict (#77)
-
-* relax ash version requirement
-
-* add custom migration types, and repo level override
-
-* update to latest version of ash
-
-## [v0.42.0-rc.4](https://github.com/ash-project/ash_postgres/compare/v0.42.0-rc.3...v0.42.0-rc.4) (2022-06-28)
+## [v2.8.0](https://github.com/ash-project/ash_postgres/compare/v2.7.0...v2.8.0) (2026-03-09)
 
 
 
 
 ### Features:
 
-* support `cast_in_query?/0` and `source`
+* add --use_fragments option to resource generator | Closes #437 (#709) by henryzhan013
 
 ### Bug Fixes:
 
-* use attribute.name if attribute.source is nil
+* test setup by Philip Capel
 
-* set attribute source properly
+* formatting by Philip Capel
 
-* ensure source is always set on attributes in snapshots
-
-* handle paths for aggregates w/ > 2 relationships
-
-* rename attributes correctly in down migration (#98)
-
-* don't generate modify commands for attributes due to schema changes
-
-* default schema to primary schema
-
-* test and confirm behavior of schemas
-
-* use correct bindings for filtered relationships
-
-* cast calcs in query expressions
-
-* explicitly type cast aggregate/calc selects
-
-* don't try and match reference schema to table schema
-
-* don't use `table` where we should use `schema` in migration generator
-
-* handle combinations of distinct & sort
-
-* ensure all single actions are explicitly marked as primary? (#95)
-
-* only rename schema when necessary
-
-* inspect un-defaultable value in error message
-
-* select custom aggregates properly
-
-* don't add reference when renaming column if unnecessary
-
-* don't cast `nil` to `""`
-
-* `!is_atom/1` -> `!is_boolean/1`
-
-* sanitize lists to stringify atoms
-
-* cast embedded atoms to strings first
-
-* don't cast `{:in, :any}` types
-
-* more don't cast any types
-
-* don't cast if there is no type
-
-* properly handle relationship filter bindings
-
-* don't consider fields changed with only source -> name changes
-
-* handle name -> source change in more places
-
-* handle name -> source rename in operation ordering
-
-* fix aggregate/base filters
-
-* don't select more fields than necessary
-
-* don't call `ecto_type` twice when resolving types
-
-* place expressions in the proper order in selects
-
-* match on count in expr
-
-* remove incorrect param count tracking
-
-* properly track param count
-
-* properly reverse parameters before/after expansion
-
-* don't use the base ecto type
-
-* don't sort when joining
-
-* ensure repo is compiled (#80)
-
-* properly construct nested join relationships
-
-* use `CiStringWrapper` type in ash_postgres
-
-* ensure we are returning * on upserts (#79)
-
-* handle new if types
-
-* copy query prefix to newly created query (#74)
-
-### Improvements:
-
-* handle fallback ecto migration default elegantly (#94)
-
-* add `ignore?` option to `references`
-
-* check_migrations, rename to `--check`
-
-* add explicit timeout capability declaration
-
-* add static schema specification in DSL
-
-* support static schema specification in migration generator
-
-* implement decimal ecto migration default (#91)
-
-* support float as Ecto migration default (#89)
-
-* update ecto
-
-* add atom impl for `EctoMigrationDefault`
-
-* Add EctoMigrationDefault protocol and implement defaults (#87)
-
-* update ecto, fix dialyzer
-
-* support new timeouts
-
-* make select unique before running query
-
-* add doc_index
-
-* add exclusion_constraint_names (#83)
-
-* support referencing aggregates from aggregate filters
-
-* support access syntax
-
-* don't upsert defaults on conflict (#77)
-
-* relax ash version requirement
-
-* add custom migration types, and repo level override
-
-* update to latest version of ash
-
-## [v0.42.0-rc.3](https://github.com/ash-project/ash_postgres/compare/v0.42.0-rc.2...v0.42.0-rc.3) (2022-06-28)
+## [v2.7.0](https://github.com/ash-project/ash_postgres/compare/v2.6.32...v2.7.0) (2026-03-05)
 
 
 
 
 ### Features:
 
-* support `cast_in_query?/0` and `source`
+* support offset option in lateral join queries (#700) by Jinkyou Son
+
+* support touch_update_defaults? option to skip update_default fields on upsert by Michael Bärtschi
 
 ### Bug Fixes:
 
-* set attribute source properly
+* bulk_create with upsert now updates update_timestamp fields on conflict by Michael Bärtschi
 
-* ensure source is always set on attributes in snapshots
+* Fix locks handling for WAIT and SKIP_LOCKED (#704) by sezaru
 
-* handle paths for aggregates w/ > 2 relationships
+* set size when type changes in migrations (Issue #150) (#694) by Jatanasio
 
-* rename attributes correctly in down migration (#98)
-
-* don't generate modify commands for attributes due to schema changes
-
-* default schema to primary schema
-
-* test and confirm behavior of schemas
-
-* use correct bindings for filtered relationships
-
-* cast calcs in query expressions
-
-* explicitly type cast aggregate/calc selects
-
-* don't try and match reference schema to table schema
-
-* don't use `table` where we should use `schema` in migration generator
-
-* handle combinations of distinct & sort
-
-* ensure all single actions are explicitly marked as primary? (#95)
-
-* only rename schema when necessary
-
-* inspect un-defaultable value in error message
-
-* select custom aggregates properly
-
-* don't add reference when renaming column if unnecessary
-
-* don't cast `nil` to `""`
-
-* `!is_atom/1` -> `!is_boolean/1`
-
-* sanitize lists to stringify atoms
-
-* cast embedded atoms to strings first
-
-* don't cast `{:in, :any}` types
-
-* more don't cast any types
-
-* don't cast if there is no type
-
-* properly handle relationship filter bindings
-
-* don't consider fields changed with only source -> name changes
-
-* handle name -> source change in more places
-
-* handle name -> source rename in operation ordering
-
-* fix aggregate/base filters
-
-* don't select more fields than necessary
-
-* don't call `ecto_type` twice when resolving types
-
-* place expressions in the proper order in selects
-
-* match on count in expr
-
-* remove incorrect param count tracking
-
-* properly track param count
-
-* properly reverse parameters before/after expansion
-
-* don't use the base ecto type
-
-* don't sort when joining
-
-* ensure repo is compiled (#80)
-
-* properly construct nested join relationships
-
-* use `CiStringWrapper` type in ash_postgres
-
-* ensure we are returning * on upserts (#79)
-
-* handle new if types
-
-* copy query prefix to newly created query (#74)
+* bulk_create with upsert now updates update_timestamp fields (#697) by Michael Bärtschi
 
 ### Improvements:
 
-* handle fallback ecto migration default elegantly (#94)
+* read touch_update_defaults? from options instead of changeset context (#701) by Michael Bärtschi
 
-* add `ignore?` option to `references`
+## [v2.6.32](https://github.com/ash-project/ash_postgres/compare/v2.6.31...v2.6.32) (2026-02-11)
 
-* check_migrations, rename to `--check`
 
-* add explicit timeout capability declaration
 
-* add static schema specification in DSL
 
-* support static schema specification in migration generator
+### Bug Fixes:
 
-* implement decimal ecto migration default (#91)
+* produce correct error on `restrict` managed_relationship behavior (#690) by lincolnhuls
 
-* support float as Ecto migration default (#89)
+### Improvements:
 
-* update ecto
+* Split up usage rules into sub-rules (#691) by Mylan Connolly
 
-* add atom impl for `EctoMigrationDefault`
+## [v2.6.31](https://github.com/ash-project/ash_postgres/compare/v2.6.30...v2.6.31) (2026-02-05)
 
-* Add EctoMigrationDefault protocol and implement defaults (#87)
 
-* update ecto, fix dialyzer
 
-* support new timeouts
 
-* make select unique before running query
+### Bug Fixes:
 
-* add doc_index
+* handle atomic no_rollback errors during creates by Zach Daniel
 
-* add exclusion_constraint_names (#83)
+* correct test expectation for `first` aggregate with `include_nil?` (#683) by sevenseacat
 
-* support referencing aggregates from aggregate filters
+## [v2.6.30](https://github.com/ash-project/ash_postgres/compare/v2.6.29...v2.6.30) (2026-02-04)
 
-* support access syntax
 
-* don't upsert defaults on conflict (#77)
+* fix for atomic create support
 
-* relax ash version requirement
+## [v2.6.29](https://github.com/ash-project/ash_postgres/compare/v2.6.28...v2.6.29) (2026-02-03)
 
-* add custom migration types, and repo level override
 
-* update to latest version of ash
 
-## [v0.42.0-rc.2](https://github.com/ash-project/ash_postgres/compare/v0.42.0-rc.1...v0.42.0-rc.2) (2022-05-18)
+
+### Improvements:
+
+* support atomic creates by Zach Daniel
+
+## [v2.6.28](https://github.com/ash-project/ash_postgres/compare/v2.6.27...v2.6.28) (2026-01-29)
+
+
+
+
+### Bug Fixes:
+
+* properly wrap through queries with subqueries in wheres by Zach Daniel
+
+### Improvements:
+
+* Update AshFunctions, remove timestamp_from_uuid_v7 (#676) by Matt Savoia
+
+* Update MigrationGenerator to use uuidv7 when available (#674) by Matt Savoia
+
+* add create_table_options for partitioned tables and more (#664) by Robert Graff
+
+## [v2.6.27](https://github.com/ash-project/ash_postgres/compare/v2.6.26...v2.6.27) (2025-12-24)
+
+
+
+
+### Bug Fixes:
+
+* don't set `size`, `precision`, or `scale` for references by Zach Daniel
+
+* apply join_relationship sort/limit in many_to_many lateral joins (#666) by sevenseacat
+
+* add overrides for timestamptz types, config them on installation by Zach Daniel
+
+* do not build query filter with or: [] when all records are successfully inserted, for return_skipped_upsert?: true (#659) by Dohan Kim
+
+## [v2.6.26](https://github.com/ash-project/ash_postgres/compare/v2.6.25...v2.6.26) (2025-11-23)
+
+
+
+
+### Improvements:
+
+* add generator to tsvector type (#655) by Jesse Williams
+
+* verify check constraint attributes at compile time by Zach Daniel
+
+* update deps for bug fixes by Zach Daniel
+
+## [v2.6.25](https://github.com/ash-project/ash_postgres/compare/v2.6.24...v2.6.25) (2025-11-05)
+
+
+
+
+### Bug Fixes:
+
+* add failing test for exists expansnion inside of calculations by Zach Daniel
+
+## [v2.6.24](https://github.com/ash-project/ash_postgres/compare/v2.6.23...v2.6.24) (2025-10-30)
+
+
+
+
+### Bug Fixes:
+
+* handle results that can't be mapped to the changeset in bulk_create (#638) by Barnabas Jovanovics
+
+* handle results that can't be mapped to the changeset in bulk_create by Barnabas Jovanovics
+
+### Improvements:
+
+* remove unused bulk operation metadata function & update ash by Zach Daniel
+
+## [v2.6.23](https://github.com/ash-project/ash_postgres/compare/v2.6.22...v2.6.23) (2025-10-15)
+
+
+
+
+### Improvements:
+
+* implement combination_acc/1 by Zach Daniel
+
+## [v2.6.22](https://github.com/ash-project/ash_postgres/compare/v2.6.21...v2.6.22) (2025-10-14)
+
+
+
+
+### Bug Fixes:
+
+* return skipped upserts in bulk_create (#626) by Barnabas Jovanovics
+
+### Improvements:
+
+* leverage new aggregate loading optimization by Zach Daniel
+
+## [v2.6.21](https://github.com/ash-project/ash_postgres/compare/v2.6.20...v2.6.21) (2025-10-10)
+
+
+
+
+### Bug Fixes:
+
+* simplify bulk operation metadata handling by Zach Daniel
+
+* update ash_postgresql to handle the new bulk_create response in Ash v3.5.44 (#632) by Daniel Gollings
+
+* Support non-public PostgreSQL schemas in resource generator (#631) by Elliot Bowes
+
+* guard against missing snapshot directories in migration generator by Elliot Bowes
+
+* ensure that tenant is properly used in many-to-many joins by Zach Daniel
+
+### Improvements:
+
+* Add immutable version of `ash_raise_error` function to support extensions like Citus (#620) by Steve Brambilla
+
+## [v2.6.20](https://github.com/ash-project/ash_postgres/compare/v2.6.19...v2.6.20) (2025-09-27)
+
+
+
+
+### Bug Fixes:
+
+* use `:mutate` repo for on_transaction_begin callback by Zach Daniel
+
+### Improvements:
+
+* location in spark errors and migration generator fixes by Zach Daniel
+
+* use default constraint of 'now()' for AshPostgres.Timestamptz (#621) by siassaj
+
+## [v2.6.19](https://github.com/ash-project/ash_postgres/compare/v2.6.18...v2.6.19) (2025-09-20)
+
+
+
+
+### Bug Fixes:
+
+* fix conditional on installing ash in installer by Zach Daniel
+
+## [v2.6.18](https://github.com/ash-project/ash_postgres/compare/v2.6.17...v2.6.18) (2025-09-19)
+
+
+
+
+### Bug Fixes:
+
+* Handle optional/empty input in relationship name guesser (#616) by Trond A Ekseth
+
+* properly handle sorts w/ parent refs on lateral joins by Zach Daniel
+
+* annotate unrelated exists expressions as supported by Zach Daniel
+
+## [v2.6.17](https://github.com/ash-project/ash_postgres/compare/v2.6.16...v2.6.17) (2025-08-31)
+
+
+
+
+### Bug Fixes:
+
+* resolve a typo in pending dev migration error message (#608) by Sheharyar Naseer
+
+## [v2.6.16](https://github.com/ash-project/ash_postgres/compare/v2.6.15...v2.6.16) (2025-08-21)
+
+
+
+
+### Improvements:
+
+* Unrelated aggregates (#606) by Zach Daniel
+
+## [v2.6.15](https://github.com/ash-project/ash_postgres/compare/v2.6.14...v2.6.15) (2025-08-07)
+
+
+
+
+### Bug Fixes:
+
+* Use new attribute source in down migration (#604) by Anatolij Werle
+
+* always set disable_async, and remove log level config by Zach Daniel
+
+## [v2.6.14](https://github.com/ash-project/ash_postgres/compare/v2.6.13...v2.6.14) (2025-07-29)
+
+
+
+
+### Bug Fixes:
+
+* deduplicate identity keys by Zach Daniel
+
+## [v2.6.13](https://github.com/ash-project/ash_postgres/compare/v2.6.12...v2.6.13) (2025-07-27)
+
+
+
+
+### Bug Fixes:
+
+* ensure tenant prefix is set only for resources with context multitenancy (#600) by Emad Shaaban
+
+## [v2.6.12](https://github.com/ash-project/ash_postgres/compare/v2.6.11...v2.6.12) (2025-07-25)
+
+
+
+
+### Bug Fixes:
+
+* ensure tenant is set on query for updates by Zach Daniel
+
+### Improvements:
+
+* do not create snapshots for resources that have no attributes  #571 (#599) by horberlan
+
+## [v2.6.11](https://github.com/ash-project/ash_postgres/compare/v2.6.10...v2.6.11) (2025-07-17)
+
+
+
+
+### Bug Fixes:
+
+* clean args and properly scope rollback task by Zach Daniel
+
+* Reverse migrations order when reverting dev migrations (#590) by Kenneth Kostrešević
+
+### Improvements:
+
+* make rollbacks safer by using `--to` instead of `-n` by Zach Daniel
+
+## [v2.6.10](https://github.com/ash-project/ash_postgres/compare/v2.6.9...v2.6.10) (2025-07-09)
+
+
+
+
+### Bug Fixes:
+
+* properly return the type when configured by Zach Daniel
+
+* retain sort when upgrading to a subquery by Zach Daniel
+
+## [v2.6.9](https://github.com/ash-project/ash_postgres/compare/v2.6.8...v2.6.9) (2025-06-25)
+
+
+
+
+### Bug Fixes:
+
+* smallserial not mapping to proper type (#574) by Marc Planelles
+
+* Fix foreign key constraint on specially named references (#572) by olivermt
+
+## [v2.6.8](https://github.com/ash-project/ash_postgres/compare/v2.6.7...v2.6.8) (2025-06-18)
+
+
+
+
+### Bug Fixes:
+
+* ensure prefix is set even with create_schemas_in_migrations? false by Zach Daniel
+
+## [v2.6.7](https://github.com/ash-project/ash_postgres/compare/v2.6.6...v2.6.7) (2025-06-13)
+
+
+
+
+### Bug Fixes:
+
+* double select error (#569) by Barnabas Jovanovics
+
+## [v2.6.6](https://github.com/ash-project/ash_postgres/compare/v2.6.5...v2.6.6) (2025-06-10)
+
+
+
+
+### Bug Fixes:
+
+* simply storage of size/scale/precision information
+
+## [v2.6.5](https://github.com/ash-project/ash_postgres/compare/v2.6.4...v2.6.5) (2025-06-10)
+
+
+
+
+### Bug Fixes:
+
+* remove spurios debug logging
+
+* properly detect nested array decimals
+
+## [v2.6.4](https://github.com/ash-project/ash_postgres/compare/v2.6.3...v2.6.4) (2025-06-09)
+
+
+
+
+### Bug Fixes:
+
+* reenable migrate task
+
+* use `force: true`, not `force?: true` calling mix.generator
+
+* casting integers to string in expressions works as intended (#564)
+
+* use better wrappers around string/ci_string
+
+### Improvements:
+
+* add `c:AshPostgres.Repo.create_schemas_in_migrations?` callback
+
+## [v2.6.3](https://github.com/ash-project/ash_postgres/compare/v2.6.2...v2.6.3) (2025-06-04)
+
+
+
+
+### Bug Fixes:
+
+* undo change for timestamptz usec, retaining precision
+
+## [v2.6.2](https://github.com/ash-project/ash_postgres/compare/v2.6.1...v2.6.2) (2025-06-04)
+
+
+
+
+### Bug Fixes:
+
+* don't use `:"timestamptz(6)"` in ecto storage type
+
+## [v2.6.1](https://github.com/ash-project/ash_postgres/compare/v2.6.0...v2.6.1) (2025-05-30)
+
+
+
+
+### Bug Fixes:
+
+* retain repo as atom in migrator task (#560)
+
+## [v2.6.0](https://github.com/ash-project/ash_postgres/compare/v2.5.22...v2.6.0) (2025-05-30)
 
 
 
 
 ### Features:
 
-* support `cast_in_query?/0` and `source`
+* --dev flag for codegen (#555)
 
 ### Bug Fixes:
 
-* don't try and match reference schema to table schema
-
-* don't use `table` where we should use `schema` in migration generator
-
-* handle combinations of distinct & sort
-
-* ensure all single actions are explicitly marked as primary? (#95)
-
-* only rename schema when necessary
-
-* inspect un-defaultable value in error message
-
-* select custom aggregates properly
-
-* don't add reference when renaming column if unnecessary
-
-* don't cast `nil` to `""`
-
-* `!is_atom/1` -> `!is_boolean/1`
-
-* sanitize lists to stringify atoms
-
-* cast embedded atoms to strings first
-
-* don't cast `{:in, :any}` types
-
-* more don't cast any types
-
-* don't cast if there is no type
-
-* properly handle relationship filter bindings
-
-* don't consider fields changed with only source -> name changes
-
-* handle name -> source change in more places
-
-* handle name -> source rename in operation ordering
-
-* fix aggregate/base filters
-
-* don't select more fields than necessary
-
-* don't call `ecto_type` twice when resolving types
-
-* place expressions in the proper order in selects
-
-* match on count in expr
-
-* remove incorrect param count tracking
-
-* properly track param count
-
-* properly reverse parameters before/after expansion
-
-* don't use the base ecto type
-
-* don't sort when joining
-
-* ensure repo is compiled (#80)
-
-* properly construct nested join relationships
-
-* use `CiStringWrapper` type in ash_postgres
-
-* ensure we are returning * on upserts (#79)
-
-* handle new if types
-
-* copy query prefix to newly created query (#74)
+* properly encode decimal scale & preicison into snapshots
 
 ### Improvements:
 
-* check_migrations, rename to `--check`
+* use new `PendingCodegen` error
 
-* add explicit timeout capability declaration
+* assume not renaming when generating dev migrations
 
-* add static schema specification in DSL
+* support scale & precision in decimal types
 
-* support static schema specification in migration generator
+## [v2.5.22](https://github.com/ash-project/ash_postgres/compare/v2.5.21...v2.5.22) (2025-05-22)
 
-* implement decimal ecto migration default (#91)
 
-* support float as Ecto migration default (#89)
 
-* update ecto
 
-* add atom impl for `EctoMigrationDefault`
+### Bug Fixes:
 
-* Add EctoMigrationDefault protocol and implement defaults (#87)
+* Convert sensitive patterns from module constant to function for OTP/28 (#552)
 
-* update ecto, fix dialyzer
+## [v2.5.21](https://github.com/ash-project/ash_postgres/compare/v2.5.20...v2.5.21) (2025-05-21)
 
-* support new timeouts
 
-* make select unique before running query
 
-* add doc_index
 
-* add exclusion_constraint_names (#83)
+### Improvements:
 
-* support referencing aggregates from aggregate filters
+* update igniter, remove inflex
 
-* support access syntax
+## [v2.5.20](https://github.com/ash-project/ash_postgres/compare/v2.5.19...v2.5.20) (2025-05-20)
 
-* don't upsert defaults on conflict (#77)
 
-* relax ash version requirement
 
-* add custom migration types, and repo level override
 
-* update to latest version of ash
+### Bug Fixes:
 
-## [v0.42.0-rc.1](https://github.com/ash-project/ash_postgres/compare/v0.42.0-rc.0...v0.42.0-rc.1) (2022-05-18)
+* self-join if combination queries require more fields
+
+* enforce tenant name rules at creation (#550)
+
+## [v2.5.19](https://github.com/ash-project/ash_postgres/compare/v2.5.18...v2.5.19) (2025-05-06)
+
+
+
+
+### Improvements:
+
+* support unions (#543)
+
+## [v2.5.18](https://github.com/ash-project/ash_postgres/compare/v2.5.17...v2.5.18) (2025-04-29)
+
+
+
+
+### Bug Fixes:
+
+* fix some issues in migration generator related to tenancy (#539)
+
+* use old multitenancy in generated removals of previous indexes (#536)
+
+* add tenant to ash bindings in update (#534)
+
+* correct order, when renaming attribute with an identity (#533)
+
+## [v2.5.17](https://github.com/ash-project/ash_postgres/compare/v2.5.16...v2.5.17) (2025-04-22)
+
+
+
+
+### Bug Fixes:
+
+* add tenant to ash bindings in update (#534)
+
+* correct order, when renaming attribute with an identity (#533)
+
+## [v2.5.16](https://github.com/ash-project/ash_postgres/compare/v2.5.15...v2.5.16) (2025-04-15)
+
+
+
+
+### Bug Fixes:
+
+* fixes for map types nested in expressions
+
+* use proper migrations path configuration
+
+## [v2.5.15](https://github.com/ash-project/ash_postgres/compare/v2.5.14...v2.5.15) (2025-04-09)
+
+
+
+
+### Bug Fixes:
+
+* ash postgres subquery usage (#524)
+
+* use subqueries for join resources
+
+* use schema when changing reference deferrability (#519)
+
+### Improvements:
+
+* propagate `-r` flag to Ecto (#521)
+
+## [v2.5.14](https://github.com/ash-project/ash_postgres/compare/v2.5.13...v2.5.14) (2025-03-28)
+
+
+
+
+### Bug Fixes:
+
+* remove debugging code accidentally committed
+
+* retain loads on atomic upgrade update actions
+
+### Improvements:
+
+* create schema before table creation (#518)
+
+## [v2.5.13](https://github.com/ash-project/ash_postgres/compare/v2.5.12...v2.5.13) (2025-03-25)
+
+
+
+
+### Bug Fixes:
+
+* order when renaming attribute with an index (#514)
+
+## [v2.5.12](https://github.com/ash-project/ash_postgres/compare/v2.5.11...v2.5.12) (2025-03-18)
+
+
+
+
+### Improvements:
+
+* include error detail in constraint violation errors
+
+## [v2.5.11](https://github.com/ash-project/ash_postgres/compare/v2.5.10...v2.5.11) (2025-03-11)
+
+
+
+
+### Bug Fixes:
+
+* ignore attributes with no known type
+
+* honor skip_unknown option in spec table generator
+
+* honor --no-migrations flag
+
+* allow optional input for relationship name guesser
+
+* put move up/down in the right place
+
+* go to top of if block
+
+* use `configures_key?/3`
+
+* don't modify repo in runtime.exs
+
+* remove Helpdesk.Repo from installer ð¤¦
+
+* only configure repo in installer if not already configured
+
+* install ash if not installed already
+
+### Improvements:
+
+* document options, add `--no-migrations`
+
+* add `skip_unknown` option to `ash_postgres.gen.resources`
+
+## [v2.5.10](https://github.com/ash-project/ash_postgres/compare/v2.5.9...v2.5.10) (2025-03-06)
+
+
+
+
+### Bug Fixes:
+
+* honor skip_tables
+
+### Improvements:
+
+* never import `schema_migrations` table
+
+## [v2.5.9](https://github.com/ash-project/ash_postgres/compare/v2.5.8...v2.5.9) (2025-03-06)
+
+
+
+
+### Bug Fixes:
+
+* match on non-empty repo options
+
+### Improvements:
+
+* add `--public` option to `gen.resources`, default `true`
+
+* add `--default-actions` option to `gen.resources`, default `true`
+
+## [v2.5.8](https://github.com/ash-project/ash_postgres/compare/v2.5.7...v2.5.8) (2025-03-06)
+
+
+
+
+### Bug Fixes:
+
+* handle CLI args better for ash_postgres.gen.resources
+
+* compose check constraints and base filters properly
+
+## [v2.5.7](https://github.com/ash-project/ash_postgres/compare/v2.5.6...v2.5.7) (2025-03-04)
+
+
+
+
+### Bug Fixes:
+
+* handle errors from identities in polymorphic resources properly (#497)
+
+* Use exclusion_constraint instead of check_constraint in add_exclusion_constraints (#495)
+
+* check for stale record errors on destroy
+
+* don't rely on private function from `Ecto.Repo` (#492)
+
+## [v2.5.6](https://github.com/ash-project/ash_postgres/compare/v2.5.5...v2.5.6) (2025-02-25)
+
+
+
+
+### Bug Fixes:
+
+* start lateral join source query bindings at 500
+
+* Ensure primary key migrations use prefix for multitenancy (#488)
+
+* don't rewrite identities when only global? is changed
+
+* don't modify an attribute when it only needs to be renamed
+
+### Improvements:
+
+* support SKIP LOCKED in locks
+
+## [v2.5.5](https://github.com/ash-project/ash_postgres/compare/v2.5.4...v2.5.5) (2025-02-17)
+
+
+
+
+### Bug Fixes:
+
+* ensure field names defaults to the field of the constraint
+
+## [v2.5.4](https://github.com/ash-project/ash_postgres/compare/v2.5.3...v2.5.4) (2025-02-17)
+
+
+
+
+### Improvements:
+
+* Add support for field names in idenitity constraints (#478)
+
+## [v2.5.3](https://github.com/ash-project/ash_postgres/compare/v2.5.2...v2.5.3) (2025-02-14)
+
+
+
+
+### Bug Fixes:
+
+* handle dropping primary key columns properly
+
+* Ignore module conflict when compiling migration file (#482)
+
+## [v2.5.2](https://github.com/ash-project/ash_postgres/compare/v2.5.1...v2.5.2) (2025-02-11)
+
+
+
+
+### Bug Fixes:
+
+* update lateral join logic to match ash_sql's
+
+* simplify lateral join source filter
+
+* update sql log switches for migration and rollback tasks (#470)
+
+### Improvements:
+
+* add vector l2 distance function
+
+* use dimenstions constraint on vector for size
+
+* consider identity.where in identity deduplicator
+
+* generate migrations task support concurrent indexes flag (#471)
+
+## [v2.5.1](https://github.com/ash-project/ash_postgres/compare/v2.5.0...v2.5.1) (2025-01-27)
+
+
+
+
+### Bug Fixes:
+
+* handle cross global to tenant references in migration generator
+
+## [v2.5.0](https://github.com/ash-project/ash_postgres/compare/v2.4.22...v2.5.0) (2025-01-20)
 
 
 
 
 ### Features:
 
-* support `cast_in_query?/0` and `source`
+* add repo callback to disable atomic actions and error expressions (#464)
 
 ### Bug Fixes:
 
-* don't use `table` where we should use `schema` in migration generator
+* generate a repo when selecting one
 
-* handle combinations of distinct & sort
-
-* ensure all single actions are explicitly marked as primary? (#95)
-
-* only rename schema when necessary
-
-* inspect un-defaultable value in error message
-
-* select custom aggregates properly
-
-* don't add reference when renaming column if unnecessary
-
-* don't cast `nil` to `""`
-
-* `!is_atom/1` -> `!is_boolean/1`
-
-* sanitize lists to stringify atoms
-
-* cast embedded atoms to strings first
-
-* don't cast `{:in, :any}` types
-
-* more don't cast any types
-
-* don't cast if there is no type
-
-* properly handle relationship filter bindings
-
-* don't consider fields changed with only source -> name changes
-
-* handle name -> source change in more places
-
-* handle name -> source rename in operation ordering
-
-* fix aggregate/base filters
-
-* don't select more fields than necessary
-
-* don't call `ecto_type` twice when resolving types
-
-* place expressions in the proper order in selects
-
-* match on count in expr
-
-* remove incorrect param count tracking
-
-* properly track param count
-
-* properly reverse parameters before/after expansion
-
-* don't use the base ecto type
-
-* don't sort when joining
-
-* ensure repo is compiled (#80)
-
-* properly construct nested join relationships
-
-* use `CiStringWrapper` type in ash_postgres
-
-* ensure we are returning * on upserts (#79)
-
-* handle new if types
-
-* copy query prefix to newly created query (#74)
+* handle regex match correctly (#460)
 
 ### Improvements:
 
-* check_migrations, rename to `--check`
+* use prettier SQL in `Ash.calculate`
 
-* add explicit timeout capability declaration
+* add `c:AshPostgres.Repo.default_constraint_match_type`
 
-* add static schema specification in DSL
+* mark ash_raise_error as STABLE
 
-* support static schema specification in migration generator
-
-* implement decimal ecto migration default (#91)
-
-* support float as Ecto migration default (#89)
-
-* update ecto
-
-* add atom impl for `EctoMigrationDefault`
-
-* Add EctoMigrationDefault protocol and implement defaults (#87)
-
-* update ecto, fix dialyzer
-
-* support new timeouts
-
-* make select unique before running query
-
-* add doc_index
-
-* add exclusion_constraint_names (#83)
-
-* support referencing aggregates from aggregate filters
-
-* support access syntax
-
-* don't upsert defaults on conflict (#77)
-
-* relax ash version requirement
-
-* add custom migration types, and repo level override
-
-* update to latest version of ash
-
-## [v0.42.0-rc.0](https://github.com/ash-project/ash_postgres/compare/v0.41.7...v0.42.0-rc.0) (2022-04-26)
+## [v2.4.22](https://github.com/ash-project/ash_postgres/compare/v2.4.21...v2.4.22) (2025-01-13)
 
 
 
+
+### Bug Fixes:
+
+* inner join bulk operations if distinct? is present
+
+* fully specificy synthesized indices from multi-resource tables
+
+## [v2.4.21](https://github.com/ash-project/ash_postgres/compare/v2.4.20...v2.4.21) (2025-01-06)
+
+
+
+
+### Bug Fixes:
+
+* filter query by source record ids when lateral joining
+
+* don't use symlinked app dir for migration's path
+
+## [v2.4.20](https://github.com/ash-project/ash_postgres/compare/v2.4.19...v2.4.20) (2024-12-26)
+
+
+
+
+### Bug Fixes:
+
+* use passed in version of postgres when modifying existing repo
+
+## [v2.4.19](https://github.com/ash-project/ash_postgres/compare/v2.4.18...v2.4.19) (2024-12-26)
+
+
+
+
+### Bug Fixes:
+
+* ensure there is always at least one upsert field so filter is run
+
+### Improvements:
+
+* better min_pg_version when modifying a repo
+
+* automatically set `min_pg_version` where possible
+
+* use a notice to suggest configuring `min_pg_version`
+
+## [v2.4.18](https://github.com/ash-project/ash_postgres/compare/v2.4.17...v2.4.18) (2024-12-20)
+
+
+
+
+### Bug Fixes:
+
+* handle double select issue
+
+### Improvements:
+
+* make igniter optional
+
+* make tsvector type selectable
+
+## [v2.4.17](https://github.com/ash-project/ash_postgres/compare/v2.4.16...v2.4.17) (2024-12-16)
+
+
+
+
+### Bug Fixes:
+
+* Fix query for metadata on foreign keys and fix duplicate references being produced (#444)
+
+* alter resource generation query to go to the source pg_constraints table instead of to the view to fetch constraint data (#443)
+
+## [v2.4.16](https://github.com/ash-project/ash_postgres/compare/v2.4.15...v2.4.16) (2024-12-12)
+
+
+
+
+### Bug Fixes:
+
+* properly support expr errors in bulk create
+
+* only build references for belongs_to relationships
+
+### Improvements:
+
+* add postgres_reference_expr callback (#438)
+
+## [v2.4.15](https://github.com/ash-project/ash_postgres/compare/v2.4.14...v2.4.15) (2024-12-06)
+
+
+
+
+### Bug Fixes:
+
+* split off varchar options from index
+
+* don't attempt to use non-existent relationship
+
+* handle manual/no_attributes? relationships in lateral join logic
+
+* don't use `priv` configuration for snapshot_path
+
+### Improvements:
+
+* update sql implementation for type determination
+
+## [v2.4.14](https://github.com/ash-project/ash_postgres/compare/v2.4.13...v2.4.14) (2024-11-27)
+
+
+
+
+### Bug Fixes:
+
+* pass AST to deal with stupid igniter behavior
+
+## [v2.4.13](https://github.com/ash-project/ash_postgres/compare/v2.4.12...v2.4.13) (2024-11-26)
+
+### Bug Fixes:
+
+- [`mix ash.migrate`] honor the `snapshots_only` option
+
+### Improvements:
+
+- [`mix ash.migrate`] honor repo configuration in migration generator
+
+- [`mix ash.codegen`] honor `:priv` in migration generator, and make it explicitly configurable
+
+- [`mix ash_postgres.install`] don't generate task aliases that run seeds in test
+
+## [v2.4.12](https://github.com/ash-project/ash_postgres/compare/v2.4.11...v2.4.12) (2024-10-30)
+
+### Bug Fixes:
+
+- [query builder] don't double add distinct clauses
+
+- [`AshPostgres.DataLayer`] don't use `cast` for changes
+
+### Improvements:
+
+- [`AshPostgres.Repo`] set `prefer_transaction?` to false in generated repos
+
+- [`AshPostgres.DataLayer`] support prefer_transaction?
+
+## [v2.4.11](https://github.com/ash-project/ash_postgres/compare/v2.4.10...v2.4.11) (2024-10-23)
+
+### Bug Fixes:
+
+- [upserts] ensure repo_opts is passed through to `repo.all/2`
+
+## [v2.4.10](https://github.com/ash-project/ash_postgres/compare/v2.4.9...v2.4.10) (2024-10-23)
+
+## Security
+
+- Patch of [GHSA-hf59-7rwq-785m](https://github.com/ash-project/ash_postgres/security/advisories/GHSA-hf59-7rwq-785m) Empty, atomic, non-bulk actions, policy bypass for side-effects vulnerability.
+
+### Bug Fixes:
+
+- [upserts] run any query that could produce errors when performing atomic upgrade
+
+- [multitenant migrations] race condition compiling migrations when concurrently creating new tenants (#406)
+
+## [v2.4.9](https://github.com/ash-project/ash_postgres/compare/v2.4.8...v2.4.9) (2024-10-16)
+
+### Bug Fixes:
+
+- [`mix ash_postgres.gen.resources`] fix resource generator task & tests
+
+## [v2.4.8](https://github.com/ash-project/ash_postgres/compare/v2.4.7...v2.4.8) (2024-10-11)
+
+### Improvements:
+
+- [migration generator] use the `name` parameter when generating migrations
+
+## [v2.4.7](https://github.com/ash-project/ash_postgres/compare/v2.4.6...v2.4.7) (2024-10-10)
+
+### Improvements:
+
+- [upserts] adapt to fixes and optimizations around skipped upserts in ash core
+
+## [v2.4.6](https://github.com/ash-project/ash_postgres/compare/v2.4.5...v2.4.6) (2024-10-07)
+
+### Improvements:
+
+- [`mix ash_postgres.install`] with `--yes` assume oldest version
+
+## [v2.4.5](https://github.com/ash-project/ash_postgres/compare/v2.4.4...v2.4.5) (2024-10-06)
+
+### Bug Fixes:
+
+- [upserts] ensure upsert fields are uniq
+
+### Improvements:
+
+- [`mix ash_postgres.install`] detect 1 arg repo use in installer
+
+- [`AshPostgres.Repo`] support to_ecto(%Ecto.Changeset{}) and from_ecto(%Ecto.Changeset{}) (#395)
+
+## [v2.4.4](https://github.com/ash-project/ash_postgres/compare/v2.4.3...v2.4.4) (2024-09-29)
+
+### Bug Fixes:
+
+- [atomic updates] handle atomic array operations
+
+## [v2.4.3](https://github.com/ash-project/ash_postgres/compare/v2.4.2...v2.4.3) (2024-09-27)
+
+### Bug Fixes:
+
+- [`mix ash_postgres.gen.resources`] support pg <= 14 in resource generator, and update tests
+
+## [v2.4.2](https://github.com/ash-project/ash_postgres/compare/v2.4.1...v2.4.2) (2024-09-24)
+
+### Bug Fixes:
+
+- [migration generator] typo of `biging` -> `bigint`
+
+- [migration generator] altering attributes not properly generating foreign keys in some cases
+
+- [`mix ash_postres.install`] use correct module name in the `DataCase` moduledocs. (#393)
+
+- [migration generator] trim input before passing to `String.to_integer/1`. (#389)
+
+### Improvements:
+
+- [`mix ash_postgres.install`] add `--repo` option to installer, and warn on clashing existing repo
+
+- [`mix ash_postgres.install`] prompt for minimum pg version
+
+- [`mix ash_postgres.install`] adjust mix task aliases to be used with `ash_postgres`
+
+- [migration generator] set a name for generated migrations
+
+## [v2.4.1](https://github.com/ash-project/ash_postgres/compare/v2.4.0...v2.4.1) (2024-09-16)
+
+### Bug Fixes:
+
+- [bulk updates] ensure that returning is never an empty list
+
+- [`mix ash_postgres.gen.resources`] match on table schema as well as table name
+
+## [v2.4.0](https://github.com/ash-project/ash_postgres/compare/v2.3.1...v2.4.0) (2024-09-13)
 
 ### Features:
 
-* support `cast_in_query?/0` and `source`
+- [`AshPostgres.Ltree`] Implement Ltree Type (#385)
+
+### Improvements:
+
+- [migration generator] remove LEAKPROOF from function to prevent migration issues
+
+- [`Ash.Changeset`] support upcoming `action_select` options
+
+- [`mix ash.install`] ensure `Repo` is started after telemetry in igniter installer
+
+## [v2.3.1](https://github.com/ash-project/ash_postgres/compare/v2.3.0...v2.3.1) (2024-09-05)
+
+### Improvements:
+
+- [`mix ash_postgres.gen.migrations`] better imported index names
+
+- [`mix ash_postgres.gen.migrations`] add `--extend` option, forwarded to generated resource
+
+## [v2.3.0](https://github.com/ash-project/ash_postgres/compare/v2.2.5...v2.3.0) (2024-09-05)
+
+### Features:
+
+- [`mix ash_postgres.gen.resources`] Add `mix ash_postgres.gen.resources` for importing tables from an existing database as resources
+
+## [v2.2.5](https://github.com/ash-project/ash_postgres/compare/v2.2.4...v2.2.5) (2024-09-04)
+
+### Improvements:
+
+- [`AshPostgres.DataLayer`] support ash main upsert_condition logic
+
+## [v2.2.4](https://github.com/ash-project/ash_postgres/compare/v2.2.3...v2.2.4) (2024-09-03)
 
 ### Bug Fixes:
 
-* select custom aggregates properly
+- [`AshPostgres.DataLayer`] ensure default bindings are present on data layer
 
-* don't add reference when renaming column if unnecessary
+- [`AshPostgres.DataLayer`] properly traverse newtypes when determining types
 
-* don't cast `nil` to `""`
-
-* `!is_atom/1` -> `!is_boolean/1`
-
-* sanitize lists to stringify atoms
-
-* cast embedded atoms to strings first
-
-* don't cast `{:in, :any}` types
-
-* more don't cast any types
-
-* don't cast if there is no type
-
-* properly handle relationship filter bindings
-
-* don't consider fields changed with only source -> name changes
-
-* handle name -> source change in more places
-
-* handle name -> source rename in operation ordering
-
-* fix aggregate/base filters
-
-* don't select more fields than necessary
-
-* don't call `ecto_type` twice when resolving types
-
-* place expressions in the proper order in selects
-
-* match on count in expr
-
-* remove incorrect param count tracking
-
-* properly track param count
-
-* properly reverse parameters before/after expansion
-
-* don't use the base ecto type
-
-* don't sort when joining
-
-* ensure repo is compiled (#80)
-
-* properly construct nested join relationships
-
-* use `CiStringWrapper` type in ash_postgres
-
-* ensure we are returning * on upserts (#79)
-
-* handle new if types
-
-* copy query prefix to newly created query (#74)
-
-### Improvements:
-
-* update ecto
-
-* add atom impl for `EctoMigrationDefault`
-
-* Add EctoMigrationDefault protocol and implement defaults (#87)
-
-* update ecto, fix dialyzer
-
-* support new timeouts
-
-* make select unique before running query
-
-* add doc_index
-
-* add exclusion_constraint_names (#83)
-
-* support referencing aggregates from aggregate filters
-
-* support access syntax
-
-* don't upsert defaults on conflict (#77)
-
-* relax ash version requirement
-
-* add custom migration types, and repo level override
-
-* update to latest version of ash
-
-## [v0.41.7](https://github.com/ash-project/ash_postgres/compare/v0.41.6...v0.41.7) (2021-12-21)
-
-
-
+## [v2.2.3](https://github.com/ash-project/ash_postgres/compare/v2.2.2...v2.2.3) (2024-08-18)
 
 ### Bug Fixes:
 
-* ensure repo is compiled (#80)
+- [`mix ash_postgres.install`] was not adding ash_functions/min_pg_version
 
-* properly construct nested join relationships
-
-* use `CiStringWrapper` type in ash_postgres
-
-* ensure we are returning * on upserts (#79)
-
-* handle new if types
-
-* copy query prefix to newly created query (#74)
-
-### Improvements:
-
-* don't upsert defaults on conflict (#77)
-
-* relax ash version requirement
-
-* add custom migration types, and repo level override
-
-* update to latest version of ash
-
-## [v0.41.6](https://github.com/ash-project/ash_postgres/compare/v0.41.5...v0.41.6) (2021-12-21)
-
-
-
+## [v2.2.2](https://github.com/ash-project/ash_postgres/compare/v2.2.1...v2.2.2) (2024-08-17)
 
 ### Bug Fixes:
 
-* properly construct nested join relationships
+- [`mix ash_postgres.install`] properly handle new igniter installer functions
 
-* use `CiStringWrapper` type in ash_postgres
-
-* ensure we are returning * on upserts (#79)
-
-* handle new if types
-
-* copy query prefix to newly created query (#74)
-
-### Improvements:
-
-* don't upsert defaults on conflict (#77)
-
-* relax ash version requirement
-
-* add custom migration types, and repo level override
-
-* update to latest version of ash
-
-## [v0.41.5](https://github.com/ash-project/ash_postgres/compare/v0.41.4...v0.41.5) (2021-11-26)
-
-
-
+## [v2.2.1](https://github.com/ash-project/ash_postgres/compare/v2.2.0...v2.2.1) (2024-08-16)
 
 ### Bug Fixes:
 
-* ensure we are returning * on upserts (#79)
-
-* handle new if types
-
-* copy query prefix to newly created query (#74)
+- [`AshPostgres.DataLayer`] set a proper default for `skip_unique_indexes`
 
 ### Improvements:
 
-* don't upsert defaults on conflict (#77)
+- [`mix ash_postgres.install`] include `min_pg_version` in new generators
 
-* relax ash version requirement
-
-* add custom migration types, and repo level override
-
-* update to latest version of ash
-
-## [v0.41.4](https://github.com/ash-project/ash_postgres/compare/v0.41.3...v0.41.4) (2021-11-25)
-
-
-
+## [v2.2.0](https://github.com/ash-project/ash_postgres/compare/v2.1.19...v2.2.0) (2024-08-13)
 
 ### Bug Fixes:
 
-* handle new if types
+- [`AshPostgres.Repo`] remove `Agent` "convenience" for determining min pg version
 
-* copy query prefix to newly created query (#74)
+We need to require that users provide this function. To that end we're
+adding a warning in a minor release branch telling users to define this.
+The agent was acting as a bottleneck that all queries must go through,
+causing nontrivial performance issues at scale.
 
-### Improvements:
+- [upserts] handle filter condition on create (#368)
 
-* don't upsert defaults on conflict (#77)
-
-* relax ash version requirement
-
-* add custom migration types, and repo level override
-
-* update to latest version of ash
-
-## [v0.41.3](https://github.com/ash-project/ash_postgres/compare/v0.41.2...v0.41.3) (2021-11-13)
-
-
-
+## [v2.1.19](https://github.com/ash-project/ash_postgres/compare/v2.1.18...v2.1.19) (2024-08-12)
 
 ### Bug Fixes:
 
-* handle new if types
+- [ecto compatibility] we missed a change when preparing for ecto 3.12 parameterized type changes
 
-* copy query prefix to newly created query (#74)
+- [exists aggregates] update ash_sql for exists aggregate fixes
+
+## [v2.1.18](https://github.com/ash-project/ash_postgres/compare/v2.1.17...v2.1.18) (2024-08-09)
 
 ### Improvements:
 
-* relax ash version requirement
+- [`ash_postgres.gen.migration`] dynamically select and allow setting a repo
 
-* add custom migration types, and repo level override
+## v2.1.17 (2024-07-27)
 
-* update to latest version of ash
+### Improvements:
 
-## [v0.41.2](https://github.com/ash-project/ash_postgres/compare/v0.41.1...v0.41.2) (2021-11-10)
+- [`ash_sql`] update ash & ash_sql for various fixes
 
-
-
+## v2.1.16 (2024-07-25)
 
 ### Bug Fixes:
 
-* copy query prefix to newly created query (#74)
+- [updates] don't overwrite non-updated fields on update
+
+- [`mix ash_postgres.generate_migrations`] ensure app is compiled before using repo modules
 
 ### Improvements:
 
-* add custom migration types, and repo level override
+- [`ash_sql`] update ash_sql for cleaner queries
 
-* update to latest version of ash
-
-## [v0.41.1](https://github.com/ash-project/ash_postgres/compare/v0.41.0-rc.9...v0.41.1) (2021-11-03)
-
-
-
+## [v2.1.15](https://github.com/ash-project/ash_postgres/compare/v2.1.14...v2.1.15) (2024-07-23)
 
 ### Bug Fixes:
 
-* copy query prefix to newly created query (#74)
+- [query building] use a subquery if any exists aggregates are in play
 
-### Improvements:
-
-* update to latest version of ash
-
-## [v0.41.0-rc.9](https://github.com/ash-project/ash_postgres/compare/v0.41.0-rc.8...v0.41.0-rc.9) (2021-11-01)
-
-
-
+## [v2.1.14](https://github.com/ash-project/ash_postgres/compare/v2.1.13...v2.1.14) (2024-07-22)
 
 ### Bug Fixes:
 
-* use proper ecto types everywhere
+- [multitenancy] properly convert tenant to string when building lateral join
 
-* try to fix missing paren issue in array_agg
-
-* fix can? for :joins (#73)
-
-* remove unused default value
-
-* use proper identity names for polymorphic resources
-
-* set identity names propertly for polymorphic resources
-
-* handle nil values in snapshots better
-
-* remove unused field from snapshot parsing
-
-### Improvements:
-
-* support `default` on aggregates
-
-* support `custom_indexes`
-
-## [v0.41.0-rc.8](https://github.com/ash-project/ash_postgres/compare/v0.41.0-rc.7...v0.41.0-rc.8) (2021-10-25)
-
-
-
+## [v2.1.13](https://github.com/ash-project/ash_postgres/compare/v2.1.12...v2.1.13) (2024-07-22)
 
 ### Bug Fixes:
 
-* fix can? for :joins (#73)
+- [atomic validations] update ash & ash_sql for fixes, test atomic validations in destroys
 
-* remove unused default value
-
-* use proper identity names for polymorphic resources
-
-* set identity names propertly for polymorphic resources
-
-* handle nil values in snapshots better
-
-* remove unused field from snapshot parsing
-
-### Improvements:
-
-* support `default` on aggregates
-
-* support `custom_indexes`
-
-## [v0.41.0-rc.7](https://github.com/ash-project/ash_postgres/compare/v0.41.0-rc.6...v0.41.0-rc.7) (2021-10-24)
-
-
-
+## [v2.1.12](https://github.com/ash-project/ash_postgres/compare/v2.1.11...v2.1.12) (2024-07-19)
 
 ### Bug Fixes:
 
-* fix can? for :joins (#73)
-
-* remove unused default value
-
-* use proper identity names for polymorphic resources
-
-* set identity names propertly for polymorphic resources
-
-* handle nil values in snapshots better
-
-* remove unused field from snapshot parsing
-
-### Improvements:
-
-* support `custom_indexes`
-
-## [v0.41.0-rc.6](https://github.com/ash-project/ash_postgres/compare/v0.41.0-rc.5...v0.41.0-rc.6) (2021-09-26)
-
-
-
+- [`mix ash_postgres.install`] properly add prod config in installer
 
 ### Bug Fixes:
 
-* remove unused default value
+- [`mix ash_postgres.install`] properly perform or don't perform configuration modification code
 
-* use proper identity names for polymorphic resources
-
-* set identity names propertly for polymorphic resources
-
-* handle nil values in snapshots better
-
-* remove unused field from snapshot parsing
+- [`has_many` relationships] allow non-unique has_many source_attributes (#355)
 
 ### Improvements:
 
-* support `custom_indexes`
+- [`mix ash_postgres.install`] prepend `:postgres` to section order
 
-## [v0.41.0-rc.5](https://github.com/ash-project/ash_postgres/compare/v0.41.0-rc.4...v0.41.0-rc.5) (2021-09-21)
+- [`mix ash.patch.extend`] pluralize table name in extender
 
-
-
+## [v2.1.10](https://github.com/ash-project/ash_postgres/compare/v2.1.9...v2.1.10) (2024-07-18)
 
 ### Bug Fixes:
 
-* use proper identity names for polymorphic resources
+- [lateral joins] allow non-unique has_many source_attributes (#355)
 
-* set identity names propertly for polymorphic resources
-
-* handle nil values in snapshots better
-
-* remove unused field from snapshot parsing
-
-### Improvements:
-
-* support `custom_indexes`
-
-## [v0.41.0-rc.4](https://github.com/ash-project/ash_postgres/compare/v0.41.0-rc.3...v0.41.0-rc.4) (2021-09-21)
-
-
-
+## [v2.1.9](https://github.com/ash-project/ash_postgres/compare/v2.1.8...v2.1.9) (2024-07-18)
 
 ### Bug Fixes:
 
-* set identity names propertly for polymorphic resources
-
-* handle nil values in snapshots better
-
-* remove unused field from snapshot parsing
-
 ### Improvements:
 
-* support `custom_indexes`
+- [`mix ash.gen.resource`] pluralize table name in extender
 
-## [v0.41.0-rc.3](https://github.com/ash-project/ash_postgres/compare/v0.41.0-rc.2...v0.41.0-rc.3) (2021-09-21)
-
-
-
+## v2.1.8 (2024-07-17)
 
 ### Bug Fixes:
 
-* handle nil values in snapshots better
+- [aggregates] update ash_sql & ash for include_nil? fix (and test it)
 
-* remove unused field from snapshot parsing
+- [aggregates] ensure synthesized query aggregates have context set
 
 ### Improvements:
 
-* support `custom_indexes`
+- [installers] update igniter dependencies
 
-## [v0.41.0-rc.2](https://github.com/ash-project/ash_postgres/compare/v0.41.0-rc.1...v0.41.0-rc.2) (2021-09-21)
+- [expressions] add `binding()` expression, for referring to the current table
 
-
-
+## v2.1.7 (2024-07-17)
 
 ### Bug Fixes:
 
-* remove unused field from snapshot parsing
+- update to latest ash version for aggregate fix
+
+- update ash_sql for include_nil? fix and test it
+
+- ensure synthesized query aggregates have context set
 
 ### Improvements:
 
-* support `custom_indexes`
+- update ash/igniter dependencies
 
-## [v0.41.0-rc.1](https://github.com/ash-project/ash_postgres/compare/v0.41.0-rc.0...v0.41.0-rc.1) (2021-09-20)
+- add `binding()` expression
 
+- use latest type casting code from ash
 
+- support new type determination code
 
+## [v2.1.6](https://github.com/ash-project/ash_postgres/compare/v2.1.5...v2.1.6) (2024-07-16)
+
+### Bug Fixes:
+
+- ensure synthesized query aggregates have context set
 
 ### Improvements:
 
-* support `custom_indexes`
+- update ash/igniter dependencies
 
-## [v0.41.0-rc.0](https://github.com/ash-project/ash_postgres/compare/v0.40.11...v0.41.0-rc.0) (2021-09-13)
+- add `binding()` expression
+
+- use latest type casting code from ash
+
+- support new type determination code
+
+## [v2.1.5](https://github.com/ash-project/ash_postgres/compare/v2.1.4...v2.1.5) (2024-07-15)
+
+### Bug Fixes:
+
+- ensure synthesized query aggregates have context set
+
+### Improvements:
+
+- [`Ash.Expr`] add `binding()` expression to refer to current table
+
+- [`Ash.Expr`] use latest type casting code from ash
+
+## [v2.1.4](https://github.com/ash-project/ash_postgres/compare/v2.1.3...v2.1.4) (2024-07-14)
+
+### Improvements:
+
+- [`Ash.Expr`] use latest type casting code from ash
+
+## [v2.1.3](https://github.com/ash-project/ash_postgres/compare/v2.1.2...v2.1.3) (2024-07-14)
+
+### Improvements:
+
+- [`Ash.Expr`] support new type determination code
+
+## [v2.1.2](https://github.com/ash-project/ash_postgres/compare/v2.1.1...v2.1.2) (2024-07-13)
+
+- [query builder] update ash & improve type casting behavior
+
+## v2.1.1 (2024-07-10)
+
+### Bug Fixes:
+
+- [mix ash_postgres.install] properly interpolate module names in installer
+
+## v2.1.0 (2024-07-10)
+
+### Features:
+
+- [AshPostgres.DataLayer] add `storage_types` configuration (#342)
+- [generators] add `mix ash_postgres.install` (`mix igniter.install ash_postgres`)
+
+### Bug Fixes:
+
+- [AshPostgres.DataLayer] ensure that `from_many?` relationships in lateral join have a limit applied
+
+- [migration generator] properly delete args passed from migrate to ecto
+
+### Improvements:
+
+- [Ash.Type.UUIDv7] add support for `:uuid_v7` type (#333)
+
+- [migration generator] order keys in snapshot json (#339)
+
+## [v2.0.12](https://github.com/ash-project/ash_postgres/compare/v2.0.11...v2.0.12) (2024-06-20)
+
+### Bug Fixes:
+
+- [migration generator] only add references indexes if they've changed
+
+## [v2.0.11](https://github.com/ash-project/ash_postgres/compare/v2.0.10...v2.0.11) (2024-06-19)
+
+### Bug Fixes:
+
+- [AshPostgres.DataLayer] rework expression type detection
+
+- [migration generator] ensure index keys are atoms in generated migrations (#332)
+
+## [v2.0.10](https://github.com/ash-project/ash_postgres/compare/v2.0.9...v2.0.10) (2024-06-18)
+
+### Bug Fixes:
+
+- [AshPostgres.DataLayer] update ash_sql to fix query generation issues
+
+- [migration generator] ensure that parens are always added to calculation generated SQL
+
+- [migration generator] properly get calculation sql
+
+### Improvements:
+
+- [AshPostgres.DataLayer] better type handling using new type inference
+
+- [identities] identities w/ calculations and where clauses in upserts
+
+## [v2.0.9](https://github.com/ash-project/ash_postgres/compare/v2.0.8...v2.0.9) (2024-06-13)
+
+### Features:
+
+- [migration generator] autogenerate index in references (#321)
+
+### Bug Fixes:
+
+- [AshPostgres.DataLayer] fix invalid select on sorting by some calculations
+
+- [AshPostgres.DataLayer] fix error message displaying in identity verifier
+
+- [lateral joining] ensure that context multitenancy is properly applied to lateral many-to-many joins
+
+- [migration generator] don't assume old snapshots have `index?` key for attributes
+
+- [ash.rollback] `list_tenants` -> `all_tenants`
+
+- [ash.rollback] when checking for roll back-able migrations, only check `Path.basename`
+
+### Improvements:
+
+- [migration generator] don't sort identity keys.
+
+## [v2.0.8](https://github.com/ash-project/ash_postgres/compare/v2.0.7...v2.0.8) (2024-06-06)
+
+## v2.0.7 (2024-06-06)
+
+### Bug Fixes:
+
+- [fix] update ash_sql and fix issues retaining lateral join context
+
+- [fix] ensure that all current attribute values are selected on bulk update shifted root query
+
+## v2.0.6 (2024-05-29)
+
+### Bug Fixes:
+
+- [atomic updates] properly support aggregate references in atomic updates
+
+- [migration generator] ensure that identities are dropped when where/nils_distinct? are changed
+
+- [migration generator] ensure that `where` is wrapped in parenthesis
+
+- [ecto compatibility] support old/new parameterized type format
+
+### Improvements:
+
+- [identities] require clarification of index names > 63 characters
+
+- [mix ash_postgres.squash_snapshots] add `ash_postgres.squash_snapshots` mix task (#302)
+
+## v2.0.5 (2024-05-24)
+
+### Improvements:
+
+- [idenities] update `ash` and support new `identity` features
+
+## [v2.0.4](https://github.com/ash-project/ash_postgres/compare/v2.0.3...v2.0.4) (2024-05-23)
+
+### Bug Fixes:
+
+[updates] ensure update's reselect all changing values
+
+## [v2.0.3](https://github.com/ash-project/ash_postgres/compare/v2.0.2...v2.0.3) (2024-05-22)
+
+### Bug Fixes:
+
+[updates] handle complex maps/list on update
+
+[Ash.Query] support anonymous aggregates in sorts
+
+[exists] ensure parent_as bindings properly reference binding names
+
+[migration generator] add and remove custom indexes in tandem properly
+
+### Improvements:
+
+[references] support `on_delete: :nilify` for specific columns (#289)
+
+## [v2.0.2](https://github.com/ash-project/ash_postgres/compare/v2.0.1...v2.0.2) (2024-05-15)
+
+### Bug Fixes:
+
+- [update_query/destroy_query] rework the update and destroy query builder to support multiple kinds of joining
+
+- [mix ash_postgres.migrate] remove duplicate repo flags (#285)
+
+- [Ash.Error.Changes.StaleRecord] ensure filter is included in stale record error messages we return
+
+- [AshPostgres.MigrationGenerator] properly parse previous version from migration generation
+
+## v2.0.1 (2024-05-12)
+
+### Bug Fixes:
+
+- [AshPostgres.MigrationGenerator] properly parse previous version of custom extensions when generating migrations
+
+## v2.0.0
+
+The changelog is starting over. Please see `/documentation/1.0-CHANGELOG.md` in GitHub for previous changelogs.
+
 ### Breaking Changes:
 
-* update to latest ash/ecto versions w/ parameterized types
-
-
-
-### Improvements:
-
-* Support default tenant migration path in releases (#69)
-
-## [v0.40.11](https://github.com/ash-project/ash_postgres/compare/v0.40.10...v0.40.11) (2021-07-28)
-
-
-
-
-### Bug Fixes:
-
-* set subquery prefix properly
-
-## [v0.40.10](https://github.com/ash-project/ash_postgres/compare/v0.40.9...v0.40.10) (2021-07-27)
-
-
-
-
-### Bug Fixes:
-
-* set subquery source correctly
-
-* create parameter for ci strings
-
-* explicitly set prefix at each level
-
-* interaction w/ attribute and context tenancy
-
-### Improvements:
-
-* info on migration generator output
-
-* use match: :full on attr multitenancy
-
-* update to latest ash
-
-* update to latest ash
-
-* upgrade ash dep
-
-## [v0.40.9](https://github.com/ash-project/ash_postgres/compare/v0.40.8...v0.40.9) (2021-07-22)
-
-
-
-
-### Bug Fixes:
-
-* don't add a non-list to a list
-
-### Improvements:
-
-* add sort + select test
-
-## [v0.40.8](https://github.com/ash-project/ash_postgres/compare/v0.40.7...v0.40.8) (2021-07-19)
-
-
-
-
-### Bug Fixes:
-
-* ensure source table is sorted in lateral join
-
-### Improvements:
-
-* fix significant performance issue in lateral joins
-
-## [v0.40.7](https://github.com/ash-project/ash_postgres/compare/v0.40.6...v0.40.7) (2021-07-12)
-
-
-
-
-### Improvements:
-
-* support default_prefix configuration
-
-## [v0.40.6](https://github.com/ash-project/ash_postgres/compare/v0.40.5...v0.40.6) (2021-07-08)
-
-
-
-
-### Bug Fixes:
-
-* fix migrator mix tasks w/ only/except tenants
-
-* drop foreign keys after table create properly
-
-* drop foreign keys before dropping table
-
-* left_lateral_join for many_to_many aggregates
-
-* properly reference nested aggregate fields for join
-
-* properly determine fallback table for polymorphic resources
-
-* ensure non-tenant resources can be aggregates
-
-* properly set aggregate query sources
-
-* retain parent as bindings
-
-* don't add `rel_source` at all
-
-* properly build atoms list
-
-* horribly hack ecto for dynamic bindings
-
-* properly coalesce aggregate values
-
-* always add nullability flag
-
-* sort references only after other same-table ops
-
-* generate multitenant foreign keys properly
-
-### Improvements:
-
-* `--name` when generating migrations
-
-* add `mix ash_postgres.rollback`
-
-* update to latest ash
-
-* update to latest ash
-
-* leverage new `private_vars` for errs
-
-## [v0.40.5](https://github.com/ash-project/ash_postgres/compare/v0.40.4...v0.40.5) (2021-07-08)
-
-
-
-
-### Bug Fixes:
-
-* fix migrator mix tasks w/ only/except tenants
-
-* drop foreign keys after table create properly
-
-* drop foreign keys before dropping table
-
-* left_lateral_join for many_to_many aggregates
-
-* properly reference nested aggregate fields for join
-
-* properly determine fallback table for polymorphic resources
-
-* ensure non-tenant resources can be aggregates
-
-* properly set aggregate query sources
-
-* retain parent as bindings
-
-* don't add `rel_source` at all
-
-* properly build atoms list
-
-* horribly hack ecto for dynamic bindings
-
-* properly coalesce aggregate values
-
-* always add nullability flag
-
-* sort references only after other same-table ops
-
-* generate multitenant foreign keys properly
-
-### Improvements:
-
-* add `mix ash_postgres.rollback`
-
-* update to latest ash
-
-* update to latest ash
-
-* leverage new `private_vars` for errs
-
-## [v0.40.4](https://github.com/ash-project/ash_postgres/compare/v0.40.3...v0.40.4) (2021-07-05)
-
-
-
-
-### Bug Fixes:
-
-* left_lateral_join for many_to_many aggregates
-
-* properly reference nested aggregate fields for join
-
-* properly determine fallback table for polymorphic resources
-
-* ensure non-tenant resources can be aggregates
-
-* properly set aggregate query sources
-
-* retain parent as bindings
-
-* don't add `rel_source` at all
-
-* properly build atoms list
-
-* horribly hack ecto for dynamic bindings
-
-* properly coalesce aggregate values
-
-* always add nullability flag
-
-* sort references only after other same-table ops
-
-* generate multitenant foreign keys properly
-
-### Improvements:
-
-* update to latest ash
-
-* update to latest ash
-
-* leverage new `private_vars` for errs
-
-## [v0.40.3](https://github.com/ash-project/ash_postgres/compare/v0.40.2...v0.40.3) (2021-07-03)
-
-
-
-
-### Bug Fixes:
-
-* ensure non-tenant resources can be aggregates
-
-* properly set aggregate query sources
-
-* retain parent as bindings
-
-* don't add `rel_source` at all
-
-* properly build atoms list
-
-* horribly hack ecto for dynamic bindings
-
-* properly coalesce aggregate values
-
-* always add nullability flag
-
-* sort references only after other same-table ops
-
-* generate multitenant foreign keys properly
-
-### Improvements:
-
-* update to latest ash
-
-* leverage new `private_vars` for errs
-
-## [v0.40.2](https://github.com/ash-project/ash_postgres/compare/v0.40.1...v0.40.2) (2021-07-02)
-
-
-
-
-### Bug Fixes:
-
-* properly set aggregate query sources
-
-* retain parent as bindings
-
-* don't add `rel_source` at all
-
-* properly build atoms list
-
-* horribly hack ecto for dynamic bindings
-
-* properly coalesce aggregate values
-
-* always add nullability flag
-
-* sort references only after other same-table ops
-
-* generate multitenant foreign keys properly
-
-### Improvements:
-
-* update to latest ash
-
-* leverage new `private_vars` for errs
-
-## [v0.40.1](https://github.com/ash-project/ash_postgres/compare/v0.40.0-rc5...v0.40.1) (2021-07-02)
-
-
-
-
-### Bug Fixes:
-
-* properly coalesce aggregate values
-
-* always add nullability flag
-
-* sort references only after other same-table ops
-
-* generate multitenant foreign keys properly
-
-### Improvements:
-
-* update to latest ash
-
-* leverage new `private_vars` for errs
-
-## [v0.40.0-rc5](https://github.com/ash-project/ash_postgres/compare/v0.40.0-rc4...v0.40.0-rc5) (2021-07-01)
-
-
-
-
-### Bug Fixes:
-
-* properly coalesce aggregate values
-
-* always add nullability flag
-
-* sort references only after other same-table ops
-
-* generate multitenant foreign keys properly
-
-### Improvements:
-
-* leverage new `private_vars` for errs
-
-## [v0.40.0-rc4](https://github.com/ash-project/ash_postgres/compare/v0.40.0-rc3...v0.40.0-rc4) (2021-06-23)
-
-
-
-
-### Bug Fixes:
-
-* always add nullability flag
-
-* sort references only after other same-table ops
-
-* generate multitenant foreign keys properly
-
-### Improvements:
-
-* leverage new `private_vars` for errs
-
-## [v0.40.0-rc3](https://github.com/ash-project/ash_postgres/compare/v0.40.0-rc2...v0.40.0-rc3) (2021-06-15)
-
-
-
-
-### Bug Fixes:
-
-* always add nullability flag
-
-* sort references only after other same-table ops
-
-* generate multitenant foreign keys properly
-
-## [v0.40.0-rc2](https://github.com/ash-project/ash_postgres/compare/v0.40.0-rc1...v0.40.0-rc2) (2021-06-08)
-
-
-
-
-### Bug Fixes:
-
-* sort references only after other same-table ops
-
-* generate multitenant foreign keys properly
-
-## [v0.40.0-rc1](https://github.com/ash-project/ash_postgres/compare/v0.40.0-rc.0...v0.40.0-rc1) (2021-06-05)
-
-
-
-
-## [v0.39.0-rc.0](https://github.com/ash-project/ash_postgres/compare/v0.38.11...v0.39.0-rc.0) (2021-06-04)
-
-
-
+- [Ash.Type.UUID] change defaults in migrations for uuids to `gen_random_uuid()`
+- [Ash.Type.DateTime] Use UTC for default generated timestamps (#131)
+- [AshPostgres.DataLayer] must now know the min_pg_version that will be used. By default we check this at repo startup by asking the database, but you can also define it yourself.
+- [AshPostgres.DataLayer] Now requires postgres version 14 or higher
 
 ### Features:
 
-* support expression based calculations
+- [AshPostgres.Timestamptz] add timestamptz types (#266)
+- [AshPostgres.Repo] add `create?` and `drop?` callbacks to `AshPostgres.Repo` (#143)
+- [AshPostgres.DataLayer] support `c:AshDataLayer.calculate/3` capability
 
-* support concat + if expressions
+### Bug Fixes:
+
+- [AshPostgres.MigrationGenerator] honor dry_run option in extension migrations
+- [AshPostgres.MigrationGenerator] don't wait for shell input when checking migrations
+- [AshPostgres.DataLayer] ensure limit/offset triggers joining for update/destroy query
+- [AshPostgres.DataLayer] properly honor `limit` in bulk operations
+- [AshPostgres.DataLayer] ensure that `exists` with a filter paired with `from_many?` functions properly
 
 ### Improvements:
 
-* various other improvements
-
-## [v0.38.11](https://github.com/ash-project/ash_postgres/compare/v0.38.10...v0.38.11) (2021-05-23)
-
-
-
-
-### Bug Fixes:
-
-* set prefix to "public" for fkeys to public schema
-
-### Improvements:
-
-* set explicit prefix on join filters
-
-## [v0.38.10](https://github.com/ash-project/ash_postgres/compare/v0.38.9...v0.38.10) (2021-05-19)
-
-
-
-
-### Improvements:
-
-* support new ash upsert specifying targets
-
-* update to latest ash
-
-## [v0.38.9](https://github.com/ash-project/ash_postgres/compare/v0.38.8...v0.38.9) (2021-05-12)
-
-
-
-
-### Bug Fixes:
-
-* properly group many_to_many aggregates
-
-## [v0.38.8](https://github.com/ash-project/ash_postgres/compare/v0.38.7...v0.38.8) (2021-05-09)
-
-
-
-
-### Improvements:
-
-* update to the latest ash version
-
-## [v0.38.7](https://github.com/ash-project/ash_postgres/compare/v0.38.6...v0.38.7) (2021-05-09)
-
-
-
-
-### Improvements:
-
-* support latest ash/filtering on related aggregates
-
-## [v0.38.6](https://github.com/ash-project/ash_postgres/compare/v0.38.5...v0.38.6) (2021-05-07)
-
-
-
-
-### Bug Fixes:
-
-* properly construct sources for lateral joins
-
-* copy the correct data for lateral join queries
-
-* better errors in error cases
-
-### Improvements:
-
-* update to latest ash
-
-## [v0.38.5](https://github.com/ash-project/ash_postgres/compare/v0.38.4...v0.38.5) (2021-05-07)
-
-
-
-
-### Bug Fixes:
-
-* don't cast booleans to string in last_ditch_cast
-
-## [v0.38.4](https://github.com/ash-project/ash_postgres/compare/v0.38.3...v0.38.4) (2021-05-07)
-
-
-
-
-### Improvements:
-
-* support latest ash version resource sorts
-
-## [v0.38.3](https://github.com/ash-project/ash_postgres/compare/v0.38.2...v0.38.3) (2021-05-06)
-
-
-
-
-### Improvements:
-
-* update to latest ash
-
-* document script to iterate migrations (#65)
-
-## [v0.38.2](https://github.com/ash-project/ash_postgres/compare/v0.38.1...v0.38.2) (2021-05-04)
-
-
-
-
-### Bug Fixes:
-
-* join to join table in lateral join query
-
-* multitenancy + lateral join sources
-
-* don't distinct in lateral joins
-
-## [v0.38.1](https://github.com/ash-project/ash_postgres/compare/v0.38.0...v0.38.1) (2021-05-04)
-
-
-
-
-### Bug Fixes:
-
-* fix fragment processing broken (#64)
-
-## [v0.38.0](https://github.com/ash-project/ash_postgres/compare/v0.37.8...v0.38.0) (2021-04-29)
-
-
-
-
-### Features:
-
-* support new side load improvements
-
-### Improvements:
-
-* Preserve attribute order (#63)
-
-## [v0.37.8](https://github.com/ash-project/ash_postgres/compare/v0.37.7...v0.37.8) (2021-04-27)
-
-
-
-
-### Bug Fixes:
-
-* simpler index names
-
-* don't prefix unique indices with prefix()
-
-* sort index operations last
-
-### Improvements:
-
-* custom index names
-
-## [v0.37.7](https://github.com/ash-project/ash_postgres/compare/v0.37.6...v0.37.7) (2021-04-27)
-
-
-
-
-### Bug Fixes:
-
-* remove inspects that were left in by accident
-
-## [v0.37.6](https://github.com/ash-project/ash_postgres/compare/v0.37.5...v0.37.6) (2021-04-27)
-
-
-
-
-### Bug Fixes:
-
-* type cast atoms to strings in last ditch cast
-
-* properly type cast
-
-* Remove duplicate file extension (#60)
-
-## [v0.37.5](https://github.com/ash-project/ash_postgres/compare/v0.37.4...v0.37.5) (2021-04-27)
-
-
-
-
-### Bug Fixes:
-
-* properly type cast
-
-## [v0.37.4](https://github.com/ash-project/ash_postgres/compare/v0.37.3...v0.37.4) (2021-04-26)
-
-
-
-
-### Improvements:
-
-* support `list` aggregate
-
-## [v0.37.3](https://github.com/ash-project/ash_postgres/compare/v0.37.2...v0.37.3) (2021-04-26)
-
-
-
-
-### Bug Fixes:
-
-* stringify struct defaults in migration generator
-
-* properly comment out extension uninstallation code
-
-## [v0.37.2](https://github.com/ash-project/ash_postgres/compare/v0.37.1...v0.37.2) (2021-04-21)
-
-
-
-
-### Improvements:
-
-* support ash enums
-
-## [v0.37.1](https://github.com/ash-project/ash_postgres/compare/v0.37.0...v0.37.1) (2021-04-19)
-
-
-
-
-### Bug Fixes:
-
-* include type in references (because it is *not* automatic)
-
-## [v0.37.0](https://github.com/ash-project/ash_postgres/compare/v0.36.5...v0.37.0) (2021-04-19)
-
-
-
-
-### Features:
-
-* add check_constraints, both for validation and migrations
-
-## [v0.36.5](https://github.com/ash-project/ash_postgres/compare/v0.36.4...v0.36.5) (2021-04-13)
-
-
-
-
-### Bug Fixes:
-
-* always drop constraints before modifying
-
-* properly compare old references and new references
-
-## [v0.36.4](https://github.com/ash-project/ash_postgres/compare/v0.36.3...v0.36.4) (2021-04-12)
-
-
-
-
-### Bug Fixes:
-
-* don't explicitly set type in `references`
-
-### Improvements:
-
-* default integers to `:bigint`
-
-## [v0.36.3](https://github.com/ash-project/ash_postgres/compare/v0.36.2...v0.36.3) (2021-04-12)
-
-
-
-
-### Improvements:
-
-* primary autoincrement key as bigserial (#54)
-
-## [v0.36.2](https://github.com/ash-project/ash_postgres/compare/v0.36.1...v0.36.2) (2021-04-09)
-
-
-
-
-### Improvements:
-
-* support new ash select feature
-
-## [v0.36.1](https://github.com/ash-project/ash_postgres/compare/v0.36.0...v0.36.1) (2021-04-04)
-
-
-
-
-### Bug Fixes:
-
-* raise when `all_tenants/0` default impl is called
-
-### Improvements:
-
-* add sum aggregate (#53)
-
-## [v0.36.0](https://github.com/ash-project/ash_postgres/compare/v0.35.5...v0.36.0) (2021-04-01)
-
-
-
-
-### Features:
-
-* support configuring references
-
-* support configuring polymorphic references
-
-* support `distinct` Ash queries
-
-## [v0.35.5](https://github.com/ash-project/ash_postgres/compare/v0.35.4...v0.35.5) (2021-03-29)
-
-
-
-
-### Bug Fixes:
-
-* Made AshPostgres.Repo.init/2 overridable (#51)
-
-### Improvements:
-
-* only count resources w/ create action for nullability
-
-* better error message on missing table
-
-## [v0.35.4](https://github.com/ash-project/ash_postgres/compare/v0.35.3...v0.35.4) (2021-03-21)
-
-
-
-
-### Bug Fixes:
-
-* reroute `Ash.Type.UUID` to `:uuid` in migrations
-
-* force create extensions snapshot
-
-### Improvements:
-
-* consistent foreign key names
-
-* support custom foreign key error messages
-
-## [v0.35.3](https://github.com/ash-project/ash_postgres/compare/v0.35.2...v0.35.3) (2021-03-19)
-
-
-
-
-### Bug Fixes:
-
-* force create extensions snapshot
-
-* more conservative inner join checks
-
-* add back in inner join detection logic
-
-### Improvements:
-
-* consistent foreign key names
-
-* support custom foreign key error messages
-
-## [v0.35.2](https://github.com/ash-project/ash_postgres/compare/v0.35.1...v0.35.2) (2021-03-05)
-
-
-
-
-### Bug Fixes:
-
-* more conservative inner join checks
-
-* add back in inner join detection logic
-
-## [v0.35.1](https://github.com/ash-project/ash_postgres/compare/v0.35.0...v0.35.1) (2021-03-02)
-
-
-
-
-### Bug Fixes:
-
-* don't start the whole app in migrate
-
-## [v0.35.0](https://github.com/ash-project/ash_postgres/compare/v0.34.7...v0.35.0) (2021-03-02)
-
-
-
-
-### Features:
-
-* automatically install extensions from repo
-
-## [v0.34.7](https://github.com/ash-project/ash_postgres/compare/v0.34.6...v0.34.7) (2021-03-02)
-
-
-
-
-### Bug Fixes:
-
-* typo in references for multitenancy
-
-* `null: true` when attr isn't on all resources for a table
-
-## [v0.34.6](https://github.com/ash-project/ash_postgres/compare/v0.34.5...v0.34.6) (2021-02-24)
-
-
-
-
-### Bug Fixes:
-
-* better embedded filters, switch to latest ash
-
-## [v0.34.5](https://github.com/ash-project/ash_postgres/compare/v0.34.4...v0.34.5) (2021-02-23)
-
-
-
-
-### Improvements:
-
-* support latest ash
-
-## [v0.34.4](https://github.com/ash-project/ash_postgres/compare/v0.34.3...v0.34.4) (2021-02-08)
-
-
-
-
-### Bug Fixes:
-
-* trim when choosing new attribute name
-
-## [v0.34.3](https://github.com/ash-project/ash_postgres/compare/v0.34.2...v0.34.3) (2021-02-06)
-
-
-
-
-### Bug Fixes:
-
-* don't reference polymorphic tables to belongs_to relationships
-
-## [v0.34.2](https://github.com/ash-project/ash_postgres/compare/v0.34.1...v0.34.2) (2021-02-06)
-
-
-
-
-### Bug Fixes:
-
-* set up references properly
-
-## [v0.34.1](https://github.com/ash-project/ash_postgres/compare/v0.34.0...v0.34.1) (2021-02-06)
-
-
-
-
-### Bug Fixes:
-
-* reference the configured table if set
-
-## [v0.34.0](https://github.com/ash-project/ash_postgres/compare/v0.33.1...v0.34.0) (2021-02-06)
-
-
-
-
-### Features:
-
-* support polymorphic relationships
-
-## [v0.33.1](https://github.com/ash-project/ash_postgres/compare/v0.33.0...v0.33.1) (2021-01-27)
-
-
-
-
-### Bug Fixes:
-
-* actually insert the tracking row
-
-## [v0.33.0](https://github.com/ash-project/ash_postgres/compare/v0.32.2...v0.33.0) (2021-01-27)
-
-
-
-
-### Features:
-
-* add `mix ash_postgres.create`
-
-* add `mix ash_postgres.migrate`
-
-* add `mix ash_postgres.migrate --tenants`
-
-* add `mix ash_postgres.drop`
-
-### Bug Fixes:
-
-* rework the way multitenant migrations work
-
-## [v0.32.2](https://github.com/ash-project/ash_postgres/compare/v0.32.1...v0.32.2) (2021-01-26)
-
-
-
-
-### Bug Fixes:
-
-* un-break the `in` filter type casting code
-
-### Improvements:
-
-* better errors for multitenant unique constraints
-
-## [v0.32.1](https://github.com/ash-project/ash_postgres/compare/v0.32.0...v0.32.1) (2021-01-24)
-
-
-
-
-### Bug Fixes:
-
-* `ago` was adding, not subtracting
-
-## [v0.32.0](https://github.com/ash-project/ash_postgres/compare/v0.31.1...v0.32.0) (2021-01-24)
-
-
-
-
-### Features:
-
-* support latest ash + contains
-
-## [v0.31.1](https://github.com/ash-project/ash_postgres/compare/v0.31.0...v0.31.1) (2021-01-22)
-
-
-
-
-### Improvements:
-
-* update to latest ash
-
-## [v0.31.0](https://github.com/ash-project/ash_postgres/compare/v0.30.1...v0.31.0) (2021-01-22)
-
-
-
-
-### Features:
-
-* support fragments
-
-* support type casting
-
-* update to latest ash to support expressions
-
-### Bug Fixes:
-
-* update CI versions
-
-## [v0.30.1](https://github.com/ash-project/ash_postgres/compare/v0.30.0...v0.30.1) (2021-01-13)
-
-
-
-
-## [v0.30.0](https://github.com/ash-project/ash_postgres/compare/v0.29.6...v0.30.0) (2021-01-13)
-
-
-
-
-### Features:
-
-* Add check_migrated option to migration generator (#40) (#43)
-
-## [v0.29.6](https://github.com/ash-project/ash_postgres/compare/v0.29.5...v0.29.6) (2021-01-12)
-
-
-
-
-### Bug Fixes:
-
-* rename out of phase, small migration fix
-
-## [v0.29.5](https://github.com/ash-project/ash_postgres/compare/v0.29.4...v0.29.5) (2021-01-10)
-
-
-
-
-### Improvements:
-
-* Use ecto_sql formatter settings (#38)
-
-## [v0.29.4](https://github.com/ash-project/ash_postgres/compare/v0.29.3...v0.29.4) (2021-01-10)
-
-
-
-
-### Improvements:
-
-* Omit field opts if they are default values (#37)
-
-## [v0.29.3](https://github.com/ash-project/ash_postgres/compare/v0.29.2...v0.29.3) (2021-01-08)
-
-
-
-
-### Improvements:
-
-* support latest ash
-
-## [v0.29.2](https://github.com/ash-project/ash_postgres/compare/v0.29.1...v0.29.2) (2021-01-08)
-
-
-
-
-### Improvements:
-
-* Make integer serial if generated
-
-## [v0.29.1](https://github.com/ash-project/ash_postgres/compare/v0.29.0...v0.29.1) (2021-01-08)
-
-
-
-
-### Improvements:
-
-* support latest ash version
-
-## [v0.29.0](https://github.com/ash-project/ash_postgres/compare/v0.28.1...v0.29.0) (2021-01-08)
-
-
-
-
-### Features:
-
-* retain snapshot history
-
-### Improvements:
-
-* support latest ash version
-
-## [v0.28.1](https://github.com/ash-project/ash_postgres/compare/v0.28.0...v0.28.1) (2021-01-07)
-
-
-
-
-### Improvements:
-
-* Add :binary migration type (#33)
-
-## [v0.28.0](https://github.com/ash-project/ash_postgres/compare/v0.27.0...v0.28.0) (2020-12-29)
-
-
-
-
-### Features:
-
-* support latest Ash version
-
-## [v0.27.0](https://github.com/ash-project/ash_postgres/compare/v0.26.2...v0.27.0) (2020-12-23)
-
-
-
-
-### Features:
-
-* support refs on both sides of operators
-
-### Bug Fixes:
-
-* bump ash version
-
-## [v0.26.2](https://github.com/ash-project/ash_postgres/compare/v0.26.1...v0.26.2) (2020-12-06)
-
-
-
-
-### Bug Fixes:
-
-* properly accept the `tenant_migration_path`
-
-## [v0.26.1](https://github.com/ash-project/ash_postgres/compare/v0.26.0...v0.26.1) (2020-12-01)
-
-
-
-
-### Bug Fixes:
-
-* set default properly when modifying
-
-## [v0.26.0](https://github.com/ash-project/ash_postgres/compare/v0.25.5...v0.26.0) (2020-11-25)
-
-
-
-
-### Features:
-
-* don't drop columns unless explicitly told to
-
-### Bug Fixes:
-
-* various migration generator bug fixes
-
-## [v0.25.5](https://github.com/ash-project/ash_postgres/compare/v0.25.4...v0.25.5) (2020-11-17)
-
-
-
-
-### Bug Fixes:
-
-* drop constraints outside of phases (#29)
-
-## [v0.25.4](https://github.com/ash-project/ash_postgres/compare/v0.25.3...v0.25.4) (2020-11-07)
-
-
-
-
-### Bug Fixes:
-
-* only alter the things that have changed
-
-## [v0.25.3](https://github.com/ash-project/ash_postgres/compare/v0.25.2...v0.25.3) (2020-11-06)
-
-
-
-
-### Improvements:
-
-* add utc_datetime migration type
-
-## [v0.25.2](https://github.com/ash-project/ash_postgres/compare/v0.25.1...v0.25.2) (2020-11-03)
-
-
-
-
-### Bug Fixes:
-
-* access data_layer_query with function
-
-## [v0.25.1](https://github.com/ash-project/ash_postgres/compare/v0.25.0...v0.25.1) (2020-10-29)
-
-
-
-
-### Improvements:
-
-* mark repo as not requiring compile-time dep
-
-## [v0.25.0](https://github.com/ash-project/ash_postgres/compare/v0.24.0...v0.25.0) (2020-10-29)
-
-
-
-
-### Features:
-
-* multitenancy (#25)
-
-### Bug Fixes:
-
-* verify repo using ensure_compiled
-
-## [v0.24.0](https://github.com/ash-project/ash_postgres/compare/v0.23.2...v0.24.0) (2020-10-17)
-
-
-
-
-### Features:
-
-* support latest ash
-
-## [v0.23.2](https://github.com/ash-project/ash_postgres/compare/v0.23.1...v0.23.2) (2020-10-07)
-
-
-
-
-## [v0.23.1](https://github.com/ash-project/ash_postgres/compare/v0.23.0...v0.23.1) (2020-10-06)
-
-
-
-
-## [v0.23.0](https://github.com/ash-project/ash_postgres/compare/v0.22.1...v0.23.0) (2020-10-06)
-
-
-
-
-### Features:
-
-* update to latest ash, trigram filter
-
-## [v0.22.1](https://github.com/ash-project/ash_postgres/compare/v0.22.0...v0.22.1) (2020-10-01)
-
-
-
-
-### Bug Fixes:
-
-* don't group alters with creates (#22)
-
-* add jason dependency, clean lockfile (#21)
-
-## [v0.22.0](https://github.com/ash-project/ash_postgres/compare/v0.21.0...v0.22.0) (2020-09-24)
-
-
-
-
-### Features:
-
-* fix error when filtering with `true`
-
-### Bug Fixes:
-
-* broken types for `in` operator
-
-## [v0.21.0](https://github.com/ash-project/ash_postgres/compare/v0.20.1...v0.21.0) (2020-09-19)
-
-
-
-
-### Features:
-
-* support base_filter (#18)
-
-## [v0.20.1](https://github.com/ash-project/ash_postgres/compare/v0.20.0...v0.20.1) (2020-09-11)
-
-
-
-
-### Bug Fixes:
-
-* document/update migration path logic
-
-## [v0.20.0](https://github.com/ash-project/ash_postgres/compare/v0.19.0...v0.20.0) (2020-09-11)
-
-
-
-
-### Features:
-
-* snapshot-based migration generator
-
-## [v0.19.0](https://github.com/ash-project/ash_postgres/compare/v0.18.0...v0.19.0) (2020-09-02)
-
-### Features:
-
-- support inner joins when possible (#15)
-
-### Bug Fixes:
-
-- better support for aggregates/calculations when delegating
-
-- don't fail w/ no extensions configured
-
-## [v0.18.0](https://github.com/ash-project/ash_postgres/compare/v0.17.0...v0.18.0) (2020-08-26)
-
-### Features:
-
-- update to ash 1.11 (#13)
-
-- support Ash v1.10 (#12)
-
-- support latest ash
-
-- update to latest ash
-
-## [v0.17.0](https://github.com/ash-project/ash_postgres/compare/v0.16.1...v0.17.0) (2020-08-26)
-
-### Features:
-
-- update to ash 1.11 (#13)
-
-- support Ash v1.10 (#12)
-
-- support latest ash
-
-- update to latest ash
-
-## [v0.16.1](https://github.com/ash-project/ash_postgres/compare/v0.16.0...v0.16.1) (2020-08-19)
-
-### Bug Fixes:
-
-- fix compile/dialyzer issues
-
-## [v0.16.0](https://github.com/ash-project/ash_postgres/compare/v0.15.0...v0.16.0) (2020-08-19)
-
-### Features:
-
-- update to latest ash
-
-- update to latest version of ash
-
-## [v0.15.0](https://github.com/ash-project/ash_postgres/compare/v0.14.0...v0.15.0) (2020-08-18)
-
-### Features:
-
-- update to latest version of ash
-
-## [v0.14.0](https://github.com/ash-project/ash_postgres/compare/v0.13.0...v0.14.0) (2020-08-17)
-
-### Features:
-
-- support ash 1.7
-
-- support named aggregates
-
-## [v0.13.0](https://github.com/ash-project/ash_postgres/compare/v0.12.1...v0.13.0) (2020-07-25)
-
-### Features:
-
-- update to latest ash
-
-- support latest ash
-
-## [v0.12.1](https://github.com/ash-project/ash_postgres/compare/v0.12.0...v0.12.1) (2020-07-24)
-
-### Bug Fixes:
-
-- add can? for `:aggregate`
-
-## [v0.12.0](https://github.com/ash-project/ash_postgres/compare/0.11.2...v0.12.0) (2020-07-24)
-
-### Features:
-
-- update to latest ash
-
-## [v0.11.2](https://github.com/ash-project/ash_postgres/compare/0.11.1...v0.11.2) (2020-07-23)
-
-### Bug Fixes:
-
-## [v0.11.1](https://github.com/ash-project/ash_postgres/compare/0.11.0...v0.11.1) (2020-07-23)
-
-### Bug Fixes:
-
-## [v0.11.0](https://github.com/ash-project/ash_postgres/compare/0.10.0...v0.11.0) (2020-07-23)
-
-### Features:
-
-- support ash 13.0 aggregates
-
-## [v0.10.0](https://github.com/ash-project/ash_postgres/compare/0.9.0...v0.10.0) (2020-07-15)
-
-### Features:
-
-- update to latest ash
-
-## [v0.9.0](https://github.com/ash-project/ash_postgres/compare/0.8.0...v0.9.0) (2020-07-13)
-
-### Features:
-
-- update to latest ash
-
-## [v0.8.0](https://github.com/ash-project/ash_postgres/compare/0.7.0...v0.8.0) (2020-07-09)
-
-### Features:
-
-- update to latest ash
-
-## [v0.7.0](https://github.com/ash-project/ash_postgres/compare/0.6.0...v0.7.0) (2020-07-09)
-
-### Features:
-
-- update to latest ash
-
-- update to latest ash, add docs
-
-- update to ash 0.9.1 for transactions
-
-## [v0.6.0](https://github.com/ash-project/ash_postgres/compare/0.5.0...v0.6.0) (2020-06-29)
-
-### Features:
-
-- update to latest ash
-
-## [v0.5.0](https://github.com/ash-project/ash_postgres/compare/0.4.0...v0.5.0) (2020-06-29)
-
-### Features:
-
-- upgrade to latest ash
-
-## [v0.4.0](https://github.com/ash-project/ash_postgres/compare/0.3.0...v0.4.0) (2020-06-27)
-
-### Features:
-
-- update to latest ash
-
-## [v0.3.0](https://github.com/ash-project/ash_postgres/compare/0.2.1...v0.3.0) (2020-06-19)
-
-### Features:
-
-- New filter style (#10)
-
-## [v0.2.1](https://github.com/ash-project/ash_postgres/compare/0.2.0...v0.2.1) (2020-06-15)
-
-### Bug Fixes:
-
-- update .formatter.exs
-
-## [v0.2.0](https://github.com/ash-project/ash_postgres/compare/0.1.4...v0.2.0) (2020-06-14)
-
-### Features:
-
-- use the new DSL builder for config (#7)
-
-## [v0.1.4](https://github.com/ash-project/ash_postgres/compare/0.1.3...v0.1.4) (2020-06-05)
-
-### Bug Fixes:
-
-- update ash version dependency
-
-- account for removal of name
-
-## [v0.1.3](https://github.com/ash-project/ash_postgres/compare/0.1.2...v0.1.3) (2020-06-03)
-
-This release was a test of our automatic hex.pm package deployment
-
-## Begin Changelog
+- [AshPostgres.Repo] warn on missing ash-functions at compile time
+- [AshPostgres.Repo] add default implementation for pg_version, and rename to `min_pg_version`
+- [mix ash.rollback] support `mix ash.rollback` with interactive rollback
+- [AshSql] move many internals out to `AshSql` package to be shared

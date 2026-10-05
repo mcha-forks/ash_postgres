@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2019 ash_postgres contributors <https://github.com/ash-project/ash_postgres/graphs/contributors>
+#
+# SPDX-License-Identifier: MIT
+
 # This file contains the configuration for Credo and you are probably reading
 # this after creating it with `mix credo.gen.config`.
 #
@@ -117,13 +121,13 @@
         #
         {Credo.Check.Refactor.CondStatements, []},
         {Credo.Check.Refactor.CyclomaticComplexity, false},
-        {Credo.Check.Refactor.FunctionArity, []},
-        {Credo.Check.Refactor.LongQuoteBlocks, []},
+        {Credo.Check.Refactor.FunctionArity, [max_arity: 10]},
+        {Credo.Check.Refactor.LongQuoteBlocks, false},
         {Credo.Check.Refactor.MapInto, []},
         {Credo.Check.Refactor.MatchInCondition, []},
         {Credo.Check.Refactor.NegatedConditionsInUnless, []},
         {Credo.Check.Refactor.NegatedConditionsWithElse, []},
-        {Credo.Check.Refactor.Nesting, [max_nesting: 5]},
+        {Credo.Check.Refactor.Nesting, [max_nesting: 7]},
         {Credo.Check.Refactor.UnlessWithElse, []},
         {Credo.Check.Refactor.WithClauses, []},
 
@@ -131,7 +135,8 @@
         ## Warnings
         #
         {Credo.Check.Warning.BoolOperationOnSameValues, []},
-        {Credo.Check.Warning.ExpensiveEmptyEnumCheck, []},
+        {Credo.Check.Warning.ExpensiveEmptyEnumCheck,
+         [files: %{excluded: ["test/array_length_expr_test.exs"]}]},
         {Credo.Check.Warning.IExPry, []},
         {Credo.Check.Warning.IoInspect, []},
         {Credo.Check.Warning.LazyLogging, []},

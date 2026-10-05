@@ -1,36 +1,199 @@
-defmodule AshPostgres.AggregateTest do
+# SPDX-FileCopyrightText: 2019 ash_postgres contributors <https://github.com/ash-project/ash_postgres/graphs/contributors>
+#
+# SPDX-License-Identifier: MIT
+
+defmodule AshSql.AggregateTest do
   use AshPostgres.RepoCase, async: false
-  alias AshPostgres.Test.{Api, Author, Comment, Organization, Post, Rating, User}
+  import ExUnit.CaptureIO
+  alias AshPostgres.Test.{Author, Chat, Comment, Organization, Post, Rating, User}
+  alias AshPostgres.Test.TwoHopExistsTest
 
   require Ash.Query
+  require Ash.Sort
+  import Ash.Expr
 
-  test "relates to actor via has_many and with an aggregate" do
+  test "nested sum aggregates" do
+    # asserting an error is not raised
+    assert Post
+           |> Ash.Query.load(:sum_of_comment_ratings_calc)
+           |> Ash.read!() == []
+  end
+
+  test "same-named aggregates with different filters are not conflated" do
+    post =
+      Post
+      |> Ash.Changeset.for_create(:create, %{title: "post"})
+      |> Ash.create!()
+
+    for title <- ["a", "b"] do
+      Comment
+      |> Ash.Changeset.for_create(:create, %{title: title})
+      |> Ash.Changeset.manage_relationship(:post, post, type: :append_and_remove)
+      |> Ash.create!()
+    end
+
+    broad = Ash.Query.Aggregate.new!(Post, :cnt, :count, path: [:comments], authorize?: false)
+
+    narrow =
+      Ash.Query.Aggregate.new!(Post, :cnt, :count,
+        path: [:comments],
+        query: Ash.Query.filter(Comment, title == "a"),
+        authorize?: false
+      )
+
+    {:ok, base_query} = Post |> Ash.Query.new() |> Ash.Query.data_layer_query()
+    {:ok, with_dependency} = AshSql.Aggregate.add_aggregates(base_query, [broad], Post, false, 0)
+
+    {:ok, selecting_narrow} =
+      AshSql.Aggregate.add_aggregates(with_dependency, [narrow], Post, true, 0)
+
+    {sql, params} = Ecto.Adapters.SQL.to_sql(:all, AshPostgres.TestRepo, selecting_narrow)
+
+    # The narrow aggregate's filter (title == "a") must reach the SQL as its own
+    # subquery; before the fix it was conflated with the broad same-named
+    # aggregate and the predicate was never emitted.
+    assert "a" in params, "narrow aggregate filter was dropped; SQL: #{sql}"
+  end
+
+  describe "sorted `first` aggregates over to-many relationships" do
+    setup do
+      post =
+        Post
+        |> Ash.Changeset.for_create(:create, %{title: "post"})
+        |> Ash.create!()
+
+      # "stuff" is neither first nor last in title order, so a filter that is
+      # applied *after* a `LIMIT 1` would produce `nil` instead of "stuff".
+      for title <- ["b", "stuff", "a", "c"] do
+        Comment
+        |> Ash.Changeset.for_create(:create, %{title: title})
+        |> Ash.Changeset.manage_relationship(:post, post, type: :append_and_remove)
+        |> Ash.create!()
+      end
+
+      %{post: post}
+    end
+
+    test "are compiled to a correlated `LIMIT 1` subquery, one lateral join each", %{post: post} do
+      fields = [:last_comment, :first_comment_nils_first_called_stuff, :count_of_comments]
+
+      {sql, _params} =
+        Post
+        |> Ash.Query.load(fields)
+        |> Ash.Query.for_read(:read)
+        |> Ash.data_layer_query!()
+        |> Map.get(:query)
+        |> then(&AshPostgres.TestRepo.to_sql(:all, &1))
+
+      # both `first` aggregates get their own `LIMIT 1` inner subquery; the
+      # count is unaffected
+      assert length(String.split(sql, "LIMIT 1")) == 3, sql
+
+      loaded = Ash.load!(post, fields)
+      assert loaded.last_comment == "stuff"
+      assert loaded.first_comment_nils_first_called_stuff == "stuff"
+      assert loaded.count_of_comments == 4
+    end
+
+    test "push the aggregate filter below the limit", %{post: post} do
+      # filter matches nothing -> nil, not the first row by sort
+      assert %{first_comment_nils_first_called_stuff: nil} =
+               Post
+               |> Ash.Changeset.for_create(:create, %{title: "other"})
+               |> Ash.create!()
+               |> Ash.load!(:first_comment_nils_first_called_stuff)
+
+      assert %{first_comment_nils_first_called_stuff: "stuff"} =
+               Ash.load!(post, :first_comment_nils_first_called_stuff)
+    end
+
+    test "work for inline `first` expressions with an argument-driven filter", %{post: post} do
+      # mirrors ash_double_entry's `balance_as_of` calculation
+      loaded =
+        Post
+        |> Ash.Query.filter(id == ^post.id)
+        |> Ash.Query.calculate(
+          :latest_before_c,
+          :string,
+          expr(
+            first(comments,
+              field: :title,
+              query: [sort: [title: :desc], filter: title < ^"c"]
+            )
+          )
+        )
+        |> Ash.read_one!()
+
+      assert loaded.calculations.latest_before_c == "b"
+    end
+  end
+
+  test "count aggregate on no cast enum field" do
+    Organization |> Ash.read!(load: [:no_cast_open_posts_count])
+  end
+
+  test "count aggregate on resource with no primary key with no field specified" do
+    assert Ash.count!(AshPostgres.Test.PostView) == 0
+  end
+
+  test "can sum count aggregates" do
     org =
       Organization
-      |> Ash.Changeset.new(%{name: "The Org"})
-      |> Api.create!()
+      |> Ash.Changeset.for_create(:create, %{name: "The Org"})
+      |> Ash.create!()
 
     post =
       Post
       |> Ash.Changeset.for_create(:create, %{title: "title"})
       |> Ash.Changeset.manage_relationship(:organization, org, type: :append_and_remove)
-      |> Api.create!()
+      |> Ash.create!()
+
+    Comment
+    |> Ash.Changeset.for_create(:create, %{title: "match"})
+    |> Ash.Changeset.manage_relationship(:post, post, type: :append_and_remove)
+    |> Ash.create!()
+
+    post =
+      Post
+      |> Ash.Changeset.for_create(:create, %{title: "title"})
+      |> Ash.Changeset.manage_relationship(:organization, org, type: :append_and_remove)
+      |> Ash.create!()
+
+    Comment
+    |> Ash.Changeset.for_create(:create, %{title: "match"})
+    |> Ash.Changeset.manage_relationship(:post, post, type: :append_and_remove)
+    |> Ash.create!()
+
+    assert Decimal.eq?(Ash.sum!(Post, :count_of_comments), Decimal.new("2"))
+  end
+
+  test "relates to actor via has_many and with an aggregate" do
+    org =
+      Organization
+      |> Ash.Changeset.for_create(:create, %{name: "The Org"})
+      |> Ash.create!()
+
+    post =
+      Post
+      |> Ash.Changeset.for_create(:create, %{title: "title"})
+      |> Ash.Changeset.manage_relationship(:organization, org, type: :append_and_remove)
+      |> Ash.create!()
 
     user =
       User
       |> Ash.Changeset.for_create(:create, %{})
       |> Ash.Changeset.manage_relationship(:organization, org, type: :append_and_remove)
-      |> Api.create!()
+      |> Ash.create!()
 
     Comment
-    |> Ash.Changeset.new(%{title: "match"})
+    |> Ash.Changeset.for_create(:create, %{title: "match"})
     |> Ash.Changeset.manage_relationship(:post, post, type: :append_and_remove)
-    |> Api.create!()
+    |> Ash.create!()
 
     read_post =
       Post
       |> Ash.Query.filter(id == ^post.id)
-      |> Api.read_one!(actor: user)
+      |> Ash.read_one!(actor: user)
 
     assert read_post.id == post.id
 
@@ -38,48 +201,283 @@ defmodule AshPostgres.AggregateTest do
       Post
       |> Ash.Query.filter(id == ^post.id)
       |> Ash.Query.load(:count_of_comments)
-      |> Api.read_one!(actor: user)
+      |> Ash.read_one!(actor: user)
 
     assert read_post.count_of_comments == 1
 
     read_post =
       post
-      |> Api.load!(:count_of_comments, actor: user)
+      |> Ash.load!(:count_of_comments, actor: user)
 
     assert read_post.count_of_comments == 1
+  end
+
+  test "loading optimizable first aggregate with relationship filter does not cause binding errors" do
+    org =
+      Organization
+      |> Ash.Changeset.for_create(:create, %{name: "The Org"})
+      |> Ash.create!()
+
+    user =
+      User
+      |> Ash.Changeset.for_create(:create, %{})
+      |> Ash.Changeset.manage_relationship(:organization, org, type: :append_and_remove)
+      |> Ash.create!()
+
+    author =
+      Author
+      |> Ash.Changeset.for_create(:create, %{first_name: "John", last_name: "Doe"})
+      |> Ash.create!()
+
+    post =
+      Post
+      |> Ash.Changeset.for_create(:create, %{title: "Test Post"})
+      |> Ash.Changeset.manage_relationship(:organization, org, type: :append_and_remove)
+      |> Ash.Changeset.manage_relationship(:author, author, type: :append_and_remove)
+      |> Ash.create!()
+
+    comment =
+      Comment
+      |> Ash.Changeset.for_create(:create, %{title: "Test Comment"})
+      |> Ash.Changeset.manage_relationship(:post, post, type: :append_and_remove)
+      |> Ash.create!()
+
+    Rating
+    |> Ash.Changeset.for_create(:create, %{score: 5, resource_id: comment.id})
+    |> Ash.Changeset.set_context(%{data_layer: %{table: "comment_ratings"}})
+    |> Ash.create!()
+
+    # 1. Filter through :author adds a binding for the :author relationship
+    # 2. Policy joins through has_many which adds DISTINCT
+    # 3. limit(1) also triggers subquery wrapping condition
+    # 4. Loading :count_of_comment_ratings (non-optimizable, through [:comments, :ratings])
+    #    triggers wrap_in_subquery_for_aggregates
+    # 5. Loading :author_first_name (optimizable first through belongs_to :author)
+    #    after wrapping, code tries to reuse the :author binding from before wrapping
+    loaded_post =
+      Post
+      |> Ash.Query.filter(id == ^post.id and author.first_name == "John")
+      |> Ash.Query.limit(1)
+      |> Ash.Query.load([:author_first_name, :count_of_comment_ratings])
+      |> Ash.read!(actor: user)
+      |> hd()
+
+    assert loaded_post.id == post.id
+    assert loaded_post.author_first_name == "John"
+    assert loaded_post.count_of_comment_ratings == 1
+  end
+
+  test "nested filters on aggregates works" do
+    org =
+      Organization
+      |> Ash.Changeset.for_create(:create, %{name: "match"})
+      |> Ash.create!()
+
+    post =
+      Post
+      |> Ash.Changeset.for_create(:create, %{title: "match"})
+      |> Ash.Changeset.manage_relationship(:organization, org, type: :append_and_remove)
+      |> Ash.create!()
+
+    post2 =
+      Post
+      |> Ash.Changeset.for_create(:create, %{title: "match"})
+      |> Ash.create!()
+
+    Comment
+    |> Ash.Changeset.for_create(:create, %{title: "match"})
+    |> Ash.Changeset.manage_relationship(:post, post2, type: :append_and_remove)
+    |> Ash.create!()
+
+    assert [%{count_of_comments_matching_org_name: 1}] =
+             Post
+             |> Ash.Query.load(:count_of_comments_matching_org_name)
+             |> Ash.Query.filter(id == ^post.id)
+             |> Ash.read!()
+  end
+
+  describe "Context Multitenancy" do
+    alias AshPostgres.MultitenancyTest.{Org, Post, User}
+
+    test "aggregating with a filter on an aggregate honors the tenant" do
+      org =
+        Org
+        |> Ash.Changeset.for_create(:create, %{name: "BTTF"})
+        |> Ash.create!()
+
+      user =
+        User
+        |> Ash.Changeset.for_create(:create, %{name: "Marty", org_id: org.id})
+        |> Ash.create!()
+
+      ["Back to 1955", "Forwards to 1985", "Forward to 2015", "Back again to 1985"]
+      |> Enum.map(
+        &(Post
+          |> Ash.Changeset.for_create(:create, %{name: &1, user_id: user.id})
+          |> Ash.create!(tenant: "org_#{org.id}", load: [:last_word]))
+      )
+
+      assert 1 ==
+               User
+               |> Ash.Query.set_tenant("org_#{org.id}")
+               |> Ash.Query.filter(count_visited > 1)
+               |> Ash.Query.load(:count_visited)
+               |> Ash.count!()
+    end
+
+    test "loading a nested aggregate honors tenant" do
+      alias AshPostgres.MultitenancyTest.{Org, Post, User}
+
+      org =
+        Org
+        |> Ash.Changeset.for_create(:create, %{name: "BTTF"})
+        |> Ash.create!()
+
+      user =
+        User
+        |> Ash.Changeset.for_create(:create, %{name: "Marty", org_id: org.id})
+        |> Ash.create!()
+
+      ["Back to 1955", "Forwards to 1985", "Forward to 2015", "Back again to 1985"]
+      |> Enum.map(
+        &(Post
+          |> Ash.Changeset.for_create(:create, %{name: &1, user_id: user.id})
+          |> Ash.create!(tenant: "org_#{org.id}", load: [:last_word]))
+      )
+
+      assert Ash.load!(user, :count_visited, tenant: "org_#{org.id}")
+             |> then(& &1.count_visited) == 4
+
+      assert Ash.load!(org, :total_posts, tenant: "org_#{org.id}")
+             |> then(& &1.total_posts) == 0
+
+      assert Ash.load!(org, :total_users_posts, tenant: "org_#{org.id}")
+             |> then(& &1.total_users_posts) == 4
+    end
+  end
+
+  describe "join filters" do
+    test "with no data, it does not effect the behavior" do
+      Author
+      |> Ash.Changeset.for_create(:create)
+      |> Ash.create!()
+
+      assert [%{count_of_posts_with_better_comment: 0}] =
+               Author
+               |> Ash.Query.load(:count_of_posts_with_better_comment)
+               |> Ash.read!()
+    end
+
+    test "it properly applies join criteria" do
+      author =
+        Author
+        |> Ash.Changeset.for_create(:create)
+        |> Ash.create!()
+
+      matching_post =
+        Post
+        |> Ash.Changeset.for_create(:create, %{title: "match", score: 10})
+        |> Ash.Changeset.manage_relationship(:author, author, type: :append_and_remove)
+        |> Ash.create!()
+
+      non_matching_post =
+        Post
+        |> Ash.Changeset.for_create(:create, %{title: "non_match", score: 100})
+        |> Ash.Changeset.manage_relationship(:author, author, type: :append_and_remove)
+        |> Ash.create!()
+
+      Comment
+      |> Ash.Changeset.for_create(:create, %{title: "match", likes: 100})
+      |> Ash.Changeset.manage_relationship(:post, matching_post, type: :append_and_remove)
+      |> Ash.create!()
+
+      Comment
+      |> Ash.Changeset.for_create(:create, %{title: "non_match", likes: 0})
+      |> Ash.Changeset.manage_relationship(:post, non_matching_post, type: :append_and_remove)
+      |> Ash.create!()
+
+      assert [%{count_of_posts_with_better_comment: 1}] =
+               Author
+               |> Ash.Query.load(:count_of_posts_with_better_comment)
+               |> Ash.read!()
+    end
+
+    test "it properly applies join criteria to exists queries in filters" do
+      author =
+        Author
+        |> Ash.Changeset.for_create(:create, %{})
+        |> Ash.create!()
+
+      non_matching_post =
+        Post
+        |> Ash.Changeset.for_create(:create, %{title: "non_match", score: 100})
+        |> Ash.Changeset.manage_relationship(:author, author, type: :append_and_remove)
+        |> Ash.create!()
+
+      Comment
+      |> Ash.Changeset.for_create(:create, %{title: "non_match", likes: 0})
+      |> Ash.Changeset.manage_relationship(:post, non_matching_post, type: :append_and_remove)
+      |> Ash.create!()
+
+      assert [] =
+               Author
+               |> Ash.Query.filter(has_post_with_better_comment)
+               |> Ash.read!()
+    end
+  end
+
+  describe "aggregates over a relationship with a limit" do
+    test "respect the relationship's limit and sort" do
+      comment =
+        Comment
+        |> Ash.Changeset.for_create(:create, %{title: "title"})
+        |> Ash.create!()
+
+      for score <- 1..5 do
+        Rating
+        |> Ash.Changeset.for_create(:create, %{score: score, resource_id: comment.id})
+        |> Ash.create!(context: %{data_layer: %{table: "comment_ratings"}})
+      end
+
+      # top_ratings has `limit: 2, sort: [score: :desc]`, so aggregates over it
+      # should only see the top two scores, [5, 4] — not all five ratings.
+      assert %{count_of_top_ratings: 2, top_rating_scores: [5, 4]} =
+               Comment
+               |> Ash.Query.filter(id == ^comment.id)
+               |> Ash.Query.load([:count_of_top_ratings, :top_rating_scores])
+               |> Ash.read_one!()
+    end
   end
 
   describe "count" do
     test "with no related data it returns 0" do
       post =
         Post
-        |> Ash.Changeset.new(%{title: "title"})
-        |> Api.create!()
+        |> Ash.Changeset.for_create(:create, %{title: "title"})
+        |> Ash.create!()
 
       assert %{count_of_comments: 0} =
                Post
                |> Ash.Query.filter(id == ^post.id)
                |> Ash.Query.load(:count_of_comments)
-               |> Api.read_one!()
+               |> Ash.read_one!()
     end
 
     test "with data and a custom aggregate, it returns the count" do
       post =
         Post
-        |> Ash.Changeset.new(%{title: "title"})
-        |> Api.create!()
+        |> Ash.Changeset.for_create(:create, %{title: "title"})
+        |> Ash.create!()
 
       Comment
-      |> Ash.Changeset.new(%{title: "match"})
+      |> Ash.Changeset.for_create(:create, %{title: "match"})
       |> Ash.Changeset.manage_relationship(:post, post, type: :append_and_remove)
-      |> Api.create!()
+      |> Ash.create!()
 
       Comment
       |> Ash.Changeset.new()
       |> Ash.Changeset.manage_relationship(:post, post, type: :append_and_remove)
-      |> Api.create!()
-
-      import Ash.Query
+      |> Ash.create!()
 
       assert %{aggregates: %{custom_count_of_comments: 1}} =
                Post
@@ -90,12 +488,12 @@ defmodule AshPostgres.AggregateTest do
                  :comments,
                  query: [filter: expr(not is_nil(title))]
                )
-               |> Api.read_one!()
+               |> Ash.read_one!()
 
       Comment
-      |> Ash.Changeset.new(%{title: "match"})
+      |> Ash.Changeset.for_create(:create, %{title: "match"})
       |> Ash.Changeset.manage_relationship(:post, post, type: :append_and_remove)
-      |> Api.create!()
+      |> Ash.create!()
 
       assert %{aggregates: %{custom_count_of_comments: 2}} =
                Post
@@ -106,26 +504,24 @@ defmodule AshPostgres.AggregateTest do
                  :comments,
                  query: [filter: expr(not is_nil(title))]
                )
-               |> Api.read_one!()
+               |> Ash.read_one!()
     end
 
     test "with data and a custom string keyed aggregate, it returns the count" do
       post =
         Post
-        |> Ash.Changeset.new(%{title: "title"})
-        |> Api.create!()
+        |> Ash.Changeset.for_create(:create, %{title: "title"})
+        |> Ash.create!()
 
       Comment
-      |> Ash.Changeset.new(%{title: "match"})
+      |> Ash.Changeset.for_create(:create, %{title: "match"})
       |> Ash.Changeset.manage_relationship(:post, post, type: :append_and_remove)
-      |> Api.create!()
+      |> Ash.create!()
 
       Comment
       |> Ash.Changeset.new()
       |> Ash.Changeset.manage_relationship(:post, post, type: :append_and_remove)
-      |> Api.create!()
-
-      import Ash.Query
+      |> Ash.create!()
 
       assert %{aggregates: %{"custom_count_of_comments" => 1}} =
                Post
@@ -136,36 +532,36 @@ defmodule AshPostgres.AggregateTest do
                  :comments,
                  query: [filter: expr(not is_nil(title))]
                )
-               |> Api.read_one!()
+               |> Ash.read_one!()
     end
 
     test "with data for a many_to_many, it returns the count" do
       post =
         Post
-        |> Ash.Changeset.new(%{title: "title"})
-        |> Api.create!()
+        |> Ash.Changeset.for_create(:create, %{title: "title"})
+        |> Ash.create!()
 
       post2 =
         Post
-        |> Ash.Changeset.new(%{title: "title2"})
-        |> Api.create!()
+        |> Ash.Changeset.for_create(:create, %{title: "title2"})
+        |> Ash.create!()
 
       post3 =
         Post
-        |> Ash.Changeset.new(%{title: "title3"})
-        |> Api.create!()
+        |> Ash.Changeset.for_create(:create, %{title: "title3"})
+        |> Ash.create!()
 
       post
       |> Ash.Changeset.new()
       |> Ash.Changeset.manage_relationship(:linked_posts, [post2, post3],
         type: :append_and_remove
       )
-      |> Api.update!()
+      |> Ash.update!()
 
       post2
       |> Ash.Changeset.new()
       |> Ash.Changeset.manage_relationship(:linked_posts, [post3], type: :append_and_remove)
-      |> Api.update!()
+      |> Ash.update!()
 
       assert [
                %{count_of_linked_posts: 2, title: "title"},
@@ -175,104 +571,373 @@ defmodule AshPostgres.AggregateTest do
                |> Ash.Query.load(:count_of_linked_posts)
                |> Ash.Query.filter(count_of_linked_posts >= 1)
                |> Ash.Query.sort(count_of_linked_posts: :desc)
-               |> Api.read!()
+               |> Ash.read!()
     end
 
     test "with data and a filter, it returns the count" do
       post =
         Post
-        |> Ash.Changeset.new(%{title: "title"})
-        |> Api.create!()
+        |> Ash.Changeset.for_create(:create, %{title: "title"})
+        |> Ash.create!()
 
       Comment
-      |> Ash.Changeset.new(%{title: "match"})
+      |> Ash.Changeset.for_create(:create, %{title: "match"})
       |> Ash.Changeset.manage_relationship(:post, post, type: :append_and_remove)
-      |> Api.create!()
+      |> Ash.create!()
 
       assert %{count_of_comments_called_match: 1} =
                Post
                |> Ash.Query.filter(id == ^post.id)
                |> Ash.Query.load(:count_of_comments_called_match)
-               |> Api.read_one!()
+               |> Ash.read_one!()
 
       Comment
-      |> Ash.Changeset.new(%{title: "not_match"})
+      |> Ash.Changeset.for_create(:create, %{title: "not_match"})
       |> Ash.Changeset.manage_relationship(:post, post, type: :append_and_remove)
-      |> Api.create!()
+      |> Ash.create!()
 
       assert %{count_of_comments_called_match: 1} =
                Post
                |> Ash.Query.filter(id == ^post.id)
                |> Ash.Query.load(:count_of_comments_called_match)
-               |> Api.read_one!()
+               |> Ash.read_one!()
+    end
+
+    test "it properly applies join criteria on the first term of a two-level path" do
+      author =
+        Author
+        |> Ash.Changeset.for_create(:create)
+        |> Ash.create!()
+
+      public_post =
+        Post
+        |> Ash.Changeset.for_create(:create, %{title: "public", public: true})
+        |> Ash.Changeset.manage_relationship(:author, author, type: :append_and_remove)
+        |> Ash.create!()
+
+      private_post =
+        Post
+        |> Ash.Changeset.for_create(:create, %{title: "private", public: false})
+        |> Ash.Changeset.manage_relationship(:author, author, type: :append_and_remove)
+        |> Ash.create!()
+
+      # Create 2 comments on the public post
+      Comment
+      |> Ash.Changeset.for_create(:create, %{title: "comment on public 1"})
+      |> Ash.Changeset.manage_relationship(:post, public_post, type: :append_and_remove)
+      |> Ash.create!()
+
+      Comment
+      |> Ash.Changeset.for_create(:create, %{title: "comment on public 2"})
+      |> Ash.Changeset.manage_relationship(:post, public_post, type: :append_and_remove)
+      |> Ash.create!()
+
+      # Create 3 comments on the private post
+      Comment
+      |> Ash.Changeset.for_create(:create, %{title: "comment on private 1"})
+      |> Ash.Changeset.manage_relationship(:post, private_post, type: :append_and_remove)
+      |> Ash.create!()
+
+      Comment
+      |> Ash.Changeset.for_create(:create, %{title: "comment on private 2"})
+      |> Ash.Changeset.manage_relationship(:post, private_post, type: :append_and_remove)
+      |> Ash.create!()
+
+      Comment
+      |> Ash.Changeset.for_create(:create, %{title: "comment on private 3"})
+      |> Ash.Changeset.manage_relationship(:post, private_post, type: :append_and_remove)
+      |> Ash.create!()
+
+      # Should only count the 2 comments on the public post, not the 3 on the private post
+      assert [%{count_of_comments_on_public_posts: 2}] =
+               Author
+               |> Ash.Query.load(:count_of_comments_on_public_posts)
+               |> Ash.read!()
     end
   end
 
   describe "exists" do
-    test "with data and a filter, it returns the count" do
+    test "with data and a filter, it returns the correct result" do
       post =
         Post
-        |> Ash.Changeset.new(%{title: "title"})
-        |> Api.create!()
+        |> Ash.Changeset.for_create(:create, %{title: "title"})
+        |> Ash.create!()
+
+      Comment
+      |> Ash.Changeset.for_create(:create, %{title: "non-match"})
+      |> Ash.Changeset.manage_relationship(:post, post, type: :append_and_remove)
+      |> Ash.create!()
 
       assert %{has_comment_called_match: false} =
                Post
                |> Ash.Query.filter(id == ^post.id)
                |> Ash.Query.load(:has_comment_called_match)
-               |> Api.read_one!()
+               |> Ash.read_one!()
 
       Comment
-      |> Ash.Changeset.new(%{title: "match"})
+      |> Ash.Changeset.for_create(:create, %{title: "match"})
       |> Ash.Changeset.manage_relationship(:post, post, type: :append_and_remove)
-      |> Api.create!()
+      |> Ash.create!()
 
       assert %{has_comment_called_match: true} =
                Post
                |> Ash.Query.filter(id == ^post.id)
                |> Ash.Query.load(:has_comment_called_match)
-               |> Api.read_one!()
+               |> Ash.read_one!()
     end
 
     test "exists aggregates can be referenced in filters" do
       post =
         Post
-        |> Ash.Changeset.new(%{title: "title"})
-        |> Api.create!()
+        |> Ash.Changeset.for_create(:create, %{title: "title"})
+        |> Ash.create!()
 
       refute Post
              |> Ash.Query.filter(has_comment_called_match)
-             |> Api.read_one!()
+             |> Ash.read_one!()
 
       Comment
-      |> Ash.Changeset.new(%{title: "match"})
+      |> Ash.Changeset.for_create(:create, %{title: "match"})
       |> Ash.Changeset.manage_relationship(:post, post, type: :append_and_remove)
-      |> Api.create!()
+      |> Ash.create!()
 
       assert %{has_comment_called_match: true} =
                Post
                |> Ash.Query.filter(has_comment_called_match)
                |> Ash.Query.load(:has_comment_called_match)
-               |> Api.read_one!()
+               |> Ash.read_one!()
+    end
+
+    test "exists aggregates can be referenced in nested filters" do
+      post =
+        Post
+        |> Ash.Changeset.for_create(:create, %{title: "title"})
+        |> Ash.create!()
+
+      Comment
+      |> Ash.Changeset.for_create(:create, %{title: "match"})
+      |> Ash.Changeset.manage_relationship(:post, post, type: :append_and_remove)
+      |> Ash.create!()
+
+      assert Comment
+             |> Ash.Query.filter(post.has_comment_called_match)
+             |> Ash.read_one!()
     end
 
     test "exists aggregates can be used at the query level" do
       post =
         Post
-        |> Ash.Changeset.new(%{title: "title"})
-        |> Api.create!()
+        |> Ash.Changeset.for_create(:create, %{title: "title"})
+        |> Ash.create!()
+
+      Post
+      |> Ash.Changeset.for_create(:create, %{title: "title2"})
+      |> Ash.create!()
 
       refute Post
              |> Ash.Query.filter(has_comment_called_match)
-             |> Api.exists?()
+             |> Ash.exists?()
 
       Comment
-      |> Ash.Changeset.new(%{title: "match"})
+      |> Ash.Changeset.for_create(:create, %{title: "match"})
       |> Ash.Changeset.manage_relationship(:post, post, type: :append_and_remove)
-      |> Api.create!()
+      |> Ash.create!()
 
-      assert Post |> Api.exists?()
+      Comment
+      |> Ash.Changeset.for_create(:create, %{title: "match"})
+      |> Ash.Changeset.manage_relationship(:post, post, type: :append_and_remove)
+      |> Ash.create!()
 
-      refute Post |> Api.exists?(query: [filter: [title: "non-match"]])
+      assert Post |> Ash.exists?()
+
+      refute Post |> Ash.exists?(query: [filter: [title: "non-match"]])
+    end
+
+    # TwoHopExistsTest: Entry belongs_to :bucket, Bucket has_many :items.
+    # Regression: exists over a multi-hop path dropped every hop after the
+    # first when the predicate had no refs (e.g. exists(path, true)).
+
+    test "multi-hop exists aggregate and exists/2 are false with zero related rows" do
+      bucket =
+        TwoHopExistsTest.Bucket
+        |> Ash.Changeset.for_create(:create, %{name: "empty bucket"})
+        |> Ash.create!()
+
+      entry =
+        TwoHopExistsTest.Entry
+        |> Ash.Changeset.for_create(:create, %{name: "entry", bucket_id: bucket.id})
+        |> Ash.create!()
+
+      fields = [:item_count, :has_item_agg?, :has_item_true?, :has_item_id?]
+
+      # the tail hop of the path must be part of the generated query
+      {sql, _params} =
+        TwoHopExistsTest.Entry
+        |> Ash.Query.load(fields)
+        |> Ash.Query.for_read(:read)
+        |> Ash.data_layer_query!()
+        |> Map.get(:query)
+        |> then(&AshPostgres.TestRepo.to_sql(:all, &1))
+
+      assert sql =~ "two_hop_items"
+
+      loaded = Ash.load!(entry, fields)
+
+      assert loaded.item_count == 0
+      assert loaded.has_item_agg? == false
+      assert loaded.has_item_true? == false
+      assert loaded.has_item_id? == false
+    end
+
+    test "multi-hop exists aggregate and exists/2 are true with one related row" do
+      bucket =
+        TwoHopExistsTest.Bucket
+        |> Ash.Changeset.for_create(:create, %{name: "bucket with item"})
+        |> Ash.create!()
+
+      TwoHopExistsTest.Item
+      |> Ash.Changeset.for_create(:create, %{name: "item", bucket_id: bucket.id})
+      |> Ash.create!()
+
+      entry =
+        TwoHopExistsTest.Entry
+        |> Ash.Changeset.for_create(:create, %{name: "entry", bucket_id: bucket.id})
+        |> Ash.create!()
+
+      loaded =
+        Ash.load!(entry, [:item_count, :has_item_agg?, :has_item_true?, :has_item_id?])
+
+      assert loaded.item_count == 1
+      assert loaded.has_item_agg? == true
+      assert loaded.has_item_true? == true
+      assert loaded.has_item_id? == true
+    end
+
+    test "three-hop exists aggregate and exists/2 only count fully reachable rows" do
+      bucket =
+        TwoHopExistsTest.Bucket
+        |> Ash.Changeset.for_create(:create, %{name: "bucket"})
+        |> Ash.create!()
+
+      entry =
+        TwoHopExistsTest.Entry
+        |> Ash.Changeset.for_create(:create, %{name: "entry", bucket_id: bucket.id})
+        |> Ash.create!()
+
+      fields = [:has_item_entry_agg?, :has_item_entry_true?]
+
+      # no items at all -> chain broken at hop 2
+      loaded = Ash.load!(entry, fields)
+      assert loaded.has_item_entry_agg? == false
+      assert loaded.has_item_entry_true? == false
+
+      # item exists but has no entry -> chain broken at hop 3
+      item =
+        TwoHopExistsTest.Item
+        |> Ash.Changeset.for_create(:create, %{name: "item", bucket_id: bucket.id})
+        |> Ash.create!()
+
+      loaded = Ash.load!(entry, fields)
+      assert loaded.has_item_entry_agg? == false
+      assert loaded.has_item_entry_true? == false
+
+      # full chain reachable
+      item
+      |> Ash.Changeset.for_update(:update, %{entry_id: entry.id})
+      |> Ash.update!()
+
+      loaded = Ash.load!(entry, fields)
+      assert loaded.has_item_entry_agg? == true
+      assert loaded.has_item_entry_true? == true
+    end
+
+    test "a broken middle hop is not masked by a no_attributes? hop later in the path" do
+      # the no_attributes? (on: true) join would find this row if the broken
+      # middle hop were not anchored
+      TwoHopExistsTest.Entry
+      |> Ash.Changeset.for_create(:create, %{name: "other entry"})
+      |> Ash.create!()
+
+      bucket =
+        TwoHopExistsTest.Bucket
+        |> Ash.Changeset.for_create(:create, %{name: "bucket without items"})
+        |> Ash.create!()
+
+      entry =
+        TwoHopExistsTest.Entry
+        |> Ash.Changeset.for_create(:create, %{name: "entry", bucket_id: bucket.id})
+        |> Ash.create!()
+
+      fields = [:has_item_any_entry_agg?, :has_item_any_entry_true?]
+
+      # bucket has no items -> chain broken at hop 2, despite entries existing
+      loaded = Ash.load!(entry, fields)
+      assert loaded.has_item_any_entry_agg? == false
+      assert loaded.has_item_any_entry_true? == false
+
+      # once an item exists, the no_attributes? hop is reachable
+      TwoHopExistsTest.Item
+      |> Ash.Changeset.for_create(:create, %{name: "item", bucket_id: bucket.id})
+      |> Ash.create!()
+
+      loaded = Ash.load!(entry, fields)
+      assert loaded.has_item_any_entry_agg? == true
+      assert loaded.has_item_any_entry_true? == true
+    end
+
+    test "single-hop exists aggregate and exists/2 are false with zero related rows" do
+      entry =
+        TwoHopExistsTest.Entry
+        |> Ash.Changeset.for_create(:create, %{name: "entry without items"})
+        |> Ash.create!()
+
+      loaded = Ash.load!(entry, [:has_direct_item_agg?, :has_direct_item_true?])
+
+      assert loaded.has_direct_item_agg? == false
+      assert loaded.has_direct_item_true? == false
+    end
+
+    test "multi-hop exists predicate is scoped to the last resource in the path" do
+      # every table in the chain has a `name` column, and every row except
+      # the leaf is named "target" - so this only passes if the predicate
+      # binds to the leaf and not to an earlier hop (or the outer row)
+      bucket =
+        TwoHopExistsTest.Bucket
+        |> Ash.Changeset.for_create(:create, %{name: "target"})
+        |> Ash.create!()
+
+      leaf_entry =
+        TwoHopExistsTest.Entry
+        |> Ash.Changeset.for_create(:create, %{name: "leaf"})
+        |> Ash.create!()
+
+      TwoHopExistsTest.Item
+      |> Ash.Changeset.for_create(:create, %{
+        name: "target",
+        bucket_id: bucket.id,
+        entry_id: leaf_entry.id
+      })
+      |> Ash.create!()
+
+      outer_entry =
+        TwoHopExistsTest.Entry
+        |> Ash.Changeset.for_create(:create, %{name: "target", bucket_id: bucket.id})
+        |> Ash.create!()
+
+      refute TwoHopExistsTest.Entry
+             |> Ash.Query.filter(exists(bucket.items.entry, name == "target"))
+             |> Ash.read_one!()
+
+      leaf_entry
+      |> Ash.Changeset.for_update(:update, %{name: "target"})
+      |> Ash.update!()
+
+      assert %{id: outer_id} =
+               TwoHopExistsTest.Entry
+               |> Ash.Query.filter(exists(bucket.items.entry, name == "target"))
+               |> Ash.read_one!()
+
+      assert outer_id == outer_entry.id
     end
   end
 
@@ -280,88 +945,195 @@ defmodule AshPostgres.AggregateTest do
     test "with no related data it returns an empty list" do
       post =
         Post
-        |> Ash.Changeset.new(%{title: "title"})
-        |> Api.create!()
+        |> Ash.Changeset.for_create(:create, %{title: "title"})
+        |> Ash.create!()
 
       assert %{comment_titles: []} =
                Post
                |> Ash.Query.filter(id == ^post.id)
                |> Ash.Query.load(:comment_titles)
-               |> Api.read_one!()
+               |> Ash.read_one!()
+    end
+
+    test "does not return nil values" do
+      post =
+        Post
+        |> Ash.Changeset.for_create(:create, %{title: "title"})
+        |> Ash.create!()
+
+      Comment
+      |> Ash.Changeset.for_create(:create, %{title: "bbb"})
+      |> Ash.Changeset.manage_relationship(:post, post, type: :append_and_remove)
+      |> Ash.create!()
+
+      Comment
+      |> Ash.Changeset.for_create(:create, %{title: nil})
+      |> Ash.Changeset.manage_relationship(:post, post, type: :append_and_remove)
+      |> Ash.create!()
+
+      Comment
+      |> Ash.Changeset.for_create(:create, %{title: "aaa"})
+      |> Ash.Changeset.manage_relationship(:post, post, type: :append_and_remove)
+      |> Ash.create!()
+
+      assert %{comment_titles: ["aaa", "bbb"]} =
+               Post
+               |> Ash.Query.filter(id == ^post.id)
+               |> Ash.Query.load(:comment_titles)
+               |> Ash.read_one!()
+    end
+
+    @tag :postgres_16
+    test "returns nil values if `include_nil?` is set to `true`" do
+      post =
+        Post
+        |> Ash.Changeset.for_create(:create, %{title: "title"})
+        |> Ash.create!()
+
+      Comment
+      |> Ash.Changeset.for_create(:create, %{title: "bbb"})
+      |> Ash.Changeset.manage_relationship(:post, post, type: :append_and_remove)
+      |> Ash.create!()
+
+      Comment
+      |> Ash.Changeset.for_create(:create, %{title: nil})
+      |> Ash.Changeset.manage_relationship(:post, post, type: :append_and_remove)
+      |> Ash.create!()
+
+      Comment
+      |> Ash.Changeset.for_create(:create, %{title: "aaa"})
+      |> Ash.Changeset.manage_relationship(:post, post, type: :append_and_remove)
+      |> Ash.create!()
+
+      assert %{comment_titles_with_nils: ["aaa", "bbb", nil]} =
+               Post
+               |> Ash.Query.filter(id == ^post.id)
+               |> Ash.Query.load(:comment_titles_with_nils)
+               |> Ash.read_one!()
     end
 
     test "with related data, it returns the value" do
       post =
         Post
-        |> Ash.Changeset.new(%{title: "title"})
-        |> Api.create!()
+        |> Ash.Changeset.for_create(:create, %{title: "title"})
+        |> Ash.create!()
 
       Comment
-      |> Ash.Changeset.new(%{title: "bbb"})
+      |> Ash.Changeset.for_create(:create, %{title: "bbb"})
       |> Ash.Changeset.manage_relationship(:post, post, type: :append_and_remove)
-      |> Api.create!()
+      |> Ash.create!()
 
       Comment
-      |> Ash.Changeset.new(%{title: "ccc"})
+      |> Ash.Changeset.for_create(:create, %{title: "ccc"})
       |> Ash.Changeset.manage_relationship(:post, post, type: :append_and_remove)
-      |> Api.create!()
+      |> Ash.create!()
 
       assert %{comment_titles: ["bbb", "ccc"]} =
                Post
                |> Ash.Query.filter(id == ^post.id)
                |> Ash.Query.load(:comment_titles)
-               |> Api.read_one!()
+               |> Ash.read_one!()
 
       Comment
-      |> Ash.Changeset.new(%{title: "aaa"})
+      |> Ash.Changeset.for_create(:create, %{title: "aaa"})
       |> Ash.Changeset.manage_relationship(:post, post, type: :append_and_remove)
-      |> Api.create!()
+      |> Ash.create!()
 
       assert %{comment_titles: ["aaa", "bbb", "ccc"]} =
                Post
                |> Ash.Query.filter(id == ^post.id)
                |> Ash.Query.load(:comment_titles)
-               |> Api.read_one!()
+               |> Ash.read_one!()
     end
 
     test "with related data, it returns the uniq" do
       post =
         Post
-        |> Ash.Changeset.new(%{title: "title"})
-        |> Api.create!()
+        |> Ash.Changeset.for_create(:create, %{title: "title"})
+        |> Ash.create!()
 
       Comment
-      |> Ash.Changeset.new(%{title: "aaa"})
+      |> Ash.Changeset.for_create(:create, %{title: "aaa"})
       |> Ash.Changeset.manage_relationship(:post, post, type: :append_and_remove)
-      |> Api.create!()
+      |> Ash.create!()
 
       Comment
-      |> Ash.Changeset.new(%{title: "aaa"})
+      |> Ash.Changeset.for_create(:create, %{title: "aaa"})
       |> Ash.Changeset.manage_relationship(:post, post, type: :append_and_remove)
-      |> Api.create!()
+      |> Ash.create!()
 
       assert %{uniq_comment_titles: ["aaa"]} =
                Post
                |> Ash.Query.filter(id == ^post.id)
                |> Ash.Query.load(:uniq_comment_titles)
-               |> Api.read_one!()
+               |> Ash.read_one!()
 
       Comment
-      |> Ash.Changeset.new(%{title: "bbb"})
+      |> Ash.Changeset.for_create(:create, %{title: "bbb"})
       |> Ash.Changeset.manage_relationship(:post, post, type: :append_and_remove)
-      |> Api.create!()
+      |> Ash.create!()
 
       assert %{uniq_comment_titles: ["aaa", "bbb"]} =
                Post
                |> Ash.Query.filter(id == ^post.id)
                |> Ash.Query.load(:uniq_comment_titles)
-               |> Api.read_one!()
+               |> Ash.read_one!()
 
       assert %{count_comment_titles: 3, count_uniq_comment_titles: 2} =
                Post
                |> Ash.Query.filter(id == ^post.id)
                |> Ash.Query.load([:count_comment_titles, :count_uniq_comment_titles])
-               |> Api.read_one!()
+               |> Ash.read_one!()
+    end
+
+    test "when related data that uses schema-based multitenancy, it returns the uniq" do
+      alias AshPostgres.MultitenancyTest.{Org, Post, User}
+
+      org =
+        Org
+        |> Ash.Changeset.for_create(:create, %{name: "BTTF"})
+        |> Ash.create!()
+
+      user =
+        User
+        |> Ash.Changeset.for_create(:create, %{name: "Marty", org_id: org.id})
+        |> Ash.create!()
+
+      ["Back to 1955", "Forwards to 1985", "Forward to 2015", "Back again to 1985"]
+      |> Enum.map(
+        &(Post
+          |> Ash.Changeset.for_create(:create, %{name: &1, user_id: user.id})
+          |> Ash.create!(tenant: "org_#{org.id}", load: [:last_word]))
+      )
+
+      user = Ash.load!(user, :years_visited, tenant: "org_#{org.id}")
+
+      assert Enum.sort(user.years_visited) == ["1955", "1985", "1985", "2015"]
+    end
+
+    test "reproduction of a bug where joins involving an aggregate use the wrong id on a join condition" do
+      tag =
+        AshPostgres.Test.Tag
+        |> Ash.Changeset.for_create(:create, %{title: "Hello There"})
+        |> Ash.create!()
+
+      post =
+        AshPostgres.Test.Post
+        |> Ash.Changeset.for_create(:create, %{title: "A Post"})
+        |> Ash.create!()
+
+      AshPostgres.Test.Comment
+      |> Ash.Changeset.for_create(:create, %{title: "Hello There"})
+      |> Ash.Changeset.manage_relationship(:post, post, type: :append_and_remove)
+      |> Ash.create!()
+
+      _post_tag =
+        AshPostgres.Test.PostTag
+        |> Ash.Changeset.for_create(:create, %{post_id: post.id, tag_id: tag.id})
+        |> Ash.create!()
+
+      assert Ash.calculate!(tag, :has_post_with_comment_with_same_title, authorize?: false) ==
+               true
     end
   end
 
@@ -369,140 +1141,277 @@ defmodule AshPostgres.AggregateTest do
     test "with no related data it returns nil" do
       post =
         Post
-        |> Ash.Changeset.new(%{title: "title"})
-        |> Api.create!()
+        |> Ash.Changeset.for_create(:create, %{title: "title"})
+        |> Ash.create!()
 
       assert %{first_comment: nil} =
                Post
                |> Ash.Query.filter(id == ^post.id)
                |> Ash.Query.load(:first_comment)
-               |> Api.read_one!()
+               |> Ash.read_one!()
     end
 
     test "with related data, it returns the value" do
       post =
         Post
-        |> Ash.Changeset.new(%{title: "title"})
-        |> Api.create!()
+        |> Ash.Changeset.for_create(:create, %{title: "title"})
+        |> Ash.create!()
 
       Comment
-      |> Ash.Changeset.new(%{title: "match"})
+      |> Ash.Changeset.for_create(:create, %{title: "match"})
       |> Ash.Changeset.manage_relationship(:post, post, type: :append_and_remove)
-      |> Api.create!()
+      |> Ash.create!()
 
       assert %{first_comment: "match"} =
                Post
                |> Ash.Query.filter(id == ^post.id)
                |> Ash.Query.load(:first_comment)
-               |> Api.read_one!()
+               |> Ash.read_one!()
 
       Comment
-      |> Ash.Changeset.new(%{title: "early match"})
+      |> Ash.Changeset.for_create(:create, %{title: "early match"})
       |> Ash.Changeset.manage_relationship(:post, post, type: :append_and_remove)
-      |> Api.create!()
+      |> Ash.create!()
 
       assert %{first_comment: "early match"} =
                Post
                |> Ash.Query.filter(id == ^post.id)
                |> Ash.Query.load(:first_comment)
-               |> Api.read_one!()
+               |> Ash.read_one!()
+    end
+
+    test "it does not return `nil` values by default" do
+      post =
+        Post
+        |> Ash.Changeset.for_create(:create, %{title: "title"})
+        |> Ash.create!()
+
+      Comment
+      |> Ash.Changeset.for_create(:create, %{title: nil})
+      |> Ash.Changeset.manage_relationship(:post, post, type: :append_and_remove)
+      |> Ash.create!()
+
+      Comment
+      |> Ash.Changeset.for_create(:create, %{title: "match"})
+      |> Ash.Changeset.manage_relationship(:post, post, type: :append_and_remove)
+      |> Ash.create!()
+
+      assert %{first_comment_nils_first: "match"} =
+               Post
+               |> Ash.Query.filter(id == ^post.id)
+               |> Ash.Query.load(:first_comment_nils_first)
+               |> Ash.read_one!()
+    end
+
+    test "it does not return `nil` values when filtered" do
+      post =
+        Post
+        |> Ash.Changeset.for_create(:create, %{title: "title"})
+        |> Ash.create!()
+
+      Comment
+      |> Ash.Changeset.for_create(:create, %{title: nil})
+      |> Ash.Changeset.manage_relationship(:post, post, type: :append_and_remove)
+      |> Ash.create!()
+
+      Comment
+      |> Ash.Changeset.for_create(:create, %{title: "stuff"})
+      |> Ash.Changeset.manage_relationship(:post, post, type: :append_and_remove)
+      |> Ash.create!()
+
+      assert %{first_comment_nils_first_called_stuff: "stuff"} =
+               Post
+               |> Ash.Query.filter(id == ^post.id)
+               |> Ash.Query.load([
+                 :first_comment_nils_first_called_stuff,
+                 :first_comment_nils_first
+               ])
+               |> Ash.read_one!()
+    end
+
+    @tag :postgres_16
+    test "it returns `nil` values when `include_nil?` is `true`" do
+      post =
+        Post
+        |> Ash.Changeset.for_create(:create, %{title: "title"})
+        |> Ash.create!()
+
+      Comment
+      |> Ash.Changeset.for_create(:create, %{title: nil})
+      |> Ash.Changeset.manage_relationship(:post, post, type: :append_and_remove)
+      |> Ash.create!()
+
+      Comment
+      |> Ash.Changeset.for_create(:create, %{title: "match"})
+      |> Ash.Changeset.manage_relationship(:post, post, type: :append_and_remove)
+      |> Ash.create!()
+
+      # With sort(title: :asc_nils_first), nil comes first.
+      # With include_nil?: true, we should get nil (not skip to the next non-nil value)
+      assert nil ==
+               Post
+               |> Ash.Query.filter(id == ^post.id)
+               |> Ash.Query.load(:first_comment_nils_first_include_nil)
+               |> Ash.read_one!()
+               |> Map.get(:first_comment_nils_first_include_nil)
     end
 
     test "it can be sorted on" do
       post =
         Post
-        |> Ash.Changeset.new(%{title: "title"})
-        |> Api.create!()
+        |> Ash.Changeset.for_create(:create, %{title: "title"})
+        |> Ash.create!()
 
       post_id = post.id
 
       Comment
-      |> Ash.Changeset.new(%{title: "match"})
+      |> Ash.Changeset.for_create(:create, %{title: "match"})
       |> Ash.Changeset.manage_relationship(:post, post, type: :append_and_remove)
-      |> Api.create!()
+      |> Ash.create!()
 
       post_2 =
         Post
-        |> Ash.Changeset.new(%{title: "title"})
-        |> Api.create!()
+        |> Ash.Changeset.for_create(:create, %{title: "title"})
+        |> Ash.create!()
 
       Comment
-      |> Ash.Changeset.new(%{title: "zed"})
+      |> Ash.Changeset.for_create(:create, %{title: "zed"})
       |> Ash.Changeset.manage_relationship(:post, post_2, type: :append_and_remove)
-      |> Api.create!()
+      |> Ash.create!()
 
       assert %{id: ^post_id} =
                Post
                |> Ash.Query.sort(:first_comment)
                |> Ash.Query.limit(1)
-               |> Api.read_one!()
+               |> Ash.read_one!()
+    end
+
+    test "sorting by an aggregate with a false default uses the default" do
+      post =
+        Post
+        |> Ash.Changeset.for_create(:create, %{title: "title", public: true})
+        |> Ash.create!()
+
+      %{id: with_public_post} =
+        Comment
+        |> Ash.Changeset.for_create(:create, %{title: "with post"})
+        |> Ash.Changeset.manage_relationship(:post, post, type: :append_and_remove)
+        |> Ash.create!()
+
+      %{id: without_post} =
+        Comment
+        |> Ash.Changeset.for_create(:create, %{title: "without post"})
+        |> Ash.create!()
+
+      # Without its default the comment without a post would sort as `nil`, which
+      # comes last in ascending order, rather than as `false`, which comes first.
+      assert [%{id: ^without_post}, %{id: ^with_public_post}] =
+               Comment
+               |> Ash.Query.sort(post_public_or_false: :asc)
+               |> Ash.read!()
+
+      assert [
+               %{id: ^without_post, post_public_or_false: false},
+               %{id: ^with_public_post, post_public_or_false: true}
+             ] =
+               Comment
+               |> Ash.Query.load(:post_public_or_false)
+               |> Ash.Query.sort(post_public_or_false: :asc)
+               |> Ash.read!()
     end
 
     test "first aggregates can be sorted on" do
       author =
         Author
-        |> Ash.Changeset.new(%{first_name: "first name"})
-        |> Api.create!()
+        |> Ash.Changeset.for_create(:create, %{first_name: "first name"})
+        |> Ash.create!()
 
       post =
         Post
-        |> Ash.Changeset.new(%{title: "title"})
+        |> Ash.Changeset.for_create(:create, %{title: "title"})
         |> Ash.Changeset.manage_relationship(:author, author, type: :append_and_remove)
-        |> Api.create!()
+        |> Ash.create!()
 
       assert %{author_first_name: "first name"} =
                Post
                |> Ash.Query.filter(id == ^post.id)
                |> Ash.Query.load(:author_first_name)
                |> Ash.Query.sort(author_first_name: :asc)
-               |> Api.read_one!()
+               |> Ash.read_one!()
+    end
+
+    test "aggregate maintains datetime precision" do
+      author =
+        Author
+        |> Ash.Changeset.for_create(:create, %{first_name: "first name"})
+        |> Ash.create!()
+
+      post =
+        Post
+        |> Ash.Changeset.for_create(:create, %{title: "title"})
+        |> Ash.Changeset.manage_relationship(:author, author, type: :append_and_remove)
+        |> Ash.create!()
+
+      latest_comment =
+        Comment
+        |> Ash.Changeset.for_create(:create, %{title: "title"})
+        |> Ash.Changeset.manage_relationship(:post, post, type: :append_and_remove)
+        |> Ash.create!()
+
+      fetched_post =
+        Post
+        |> Ash.Query.filter(id == ^post.id)
+        |> Ash.Query.load(:latest_comment_created_at)
+        |> Ash.read_one!()
+
+      assert latest_comment.created_at == fetched_post.latest_comment_created_at
     end
 
     test "it can be sorted on and produces the appropriate order" do
       post1 =
         Post
-        |> Ash.Changeset.new(%{title: "title"})
-        |> Api.create!()
+        |> Ash.Changeset.for_create(:create, %{title: "title"})
+        |> Ash.create!()
 
       Comment
-      |> Ash.Changeset.new(%{title: "b"})
+      |> Ash.Changeset.for_create(:create, %{title: "b"})
       |> Ash.Changeset.manage_relationship(:post, post1, type: :append_and_remove)
-      |> Api.create!()
+      |> Ash.create!()
 
       Comment
-      |> Ash.Changeset.new(%{title: "c"})
+      |> Ash.Changeset.for_create(:create, %{title: "c"})
       |> Ash.Changeset.manage_relationship(:post, post1, type: :append_and_remove)
-      |> Api.create!()
+      |> Ash.create!()
 
       post2 =
         Post
-        |> Ash.Changeset.new(%{title: "title"})
-        |> Api.create!()
+        |> Ash.Changeset.for_create(:create, %{title: "title"})
+        |> Ash.create!()
 
       Comment
-      |> Ash.Changeset.new(%{title: "a"})
+      |> Ash.Changeset.for_create(:create, %{title: "a"})
       |> Ash.Changeset.manage_relationship(:post, post2, type: :append_and_remove)
-      |> Api.create!()
+      |> Ash.create!()
 
       Comment
-      |> Ash.Changeset.new(%{title: "b"})
+      |> Ash.Changeset.for_create(:create, %{title: "b"})
       |> Ash.Changeset.manage_relationship(:post, post2, type: :append_and_remove)
-      |> Api.create!()
+      |> Ash.create!()
 
       post3 =
         Post
-        |> Ash.Changeset.new(%{title: "title"})
-        |> Api.create!()
+        |> Ash.Changeset.for_create(:create, %{title: "title"})
+        |> Ash.create!()
 
       Comment
-      |> Ash.Changeset.new(%{title: "c"})
+      |> Ash.Changeset.for_create(:create, %{title: "c"})
       |> Ash.Changeset.manage_relationship(:post, post3, type: :append_and_remove)
-      |> Api.create!()
+      |> Ash.create!()
 
       Comment
-      |> Ash.Changeset.new(%{title: "d"})
+      |> Ash.Changeset.for_create(:create, %{title: "d"})
       |> Ash.Changeset.manage_relationship(:post, post3, type: :append_and_remove)
-      |> Api.create!()
+      |> Ash.create!()
 
       assert [%{last_comment: "d"}, %{last_comment: "c"}] =
                Post
@@ -510,15 +1419,15 @@ defmodule AshPostgres.AggregateTest do
                |> Ash.Query.sort(last_comment: :desc)
                |> Ash.Query.filter(not is_nil(comments.title))
                |> Ash.Query.limit(2)
-               |> Api.read!()
+               |> Ash.read!()
     end
   end
 
   test "sum aggregates show the same value with filters on the sum vs filters on relationships" do
     post =
       Post
-      |> Ash.Changeset.new(%{title: "title"})
-      |> Api.create!()
+      |> Ash.Changeset.for_create(:create, %{title: "title"})
+      |> Ash.create!()
 
     for i <- 1..5 do
       ratings =
@@ -527,329 +1436,367 @@ defmodule AshPostgres.AggregateTest do
         end
 
       Comment
-      |> Ash.Changeset.new(%{title: "title#{i}"})
+      |> Ash.Changeset.for_create(:create, %{title: "title#{i}"})
       |> Ash.Changeset.manage_relationship(:post, post, type: :append_and_remove)
       |> Ash.Changeset.manage_relationship(:ratings, ratings, type: :create)
-      |> Api.create!()
+      |> Ash.create!()
     end
 
     values =
       post
-      |> Api.load!([
-        :sum_of_popular_comment_rating_scores,
+      |> Ash.load!([
         :sum_of_popular_comment_rating_scores_2
       ])
-      |> Map.take([:sum_of_popular_comment_rating_scores, :sum_of_popular_comment_rating_scores_2])
-      |> Map.values()
+      |> Map.take([:sum_of_popular_comment_rating_scores_2])
 
-    assert [80, 80] = values
+    assert %{sum_of_popular_comment_rating_scores_2: 80} =
+             values
+
+    values =
+      post
+      |> Ash.load!([
+        :sum_of_odd_comment_rating_scores
+      ])
+      |> Map.take([:sum_of_odd_comment_rating_scores])
+
+    assert %{sum_of_odd_comment_rating_scores: 120} =
+             values
   end
 
   test "can't define multidimensional array aggregate types" do
-    assert_raise Spark.Error.DslError, ~r/Aggregate not supported/, fn ->
-      defmodule Foo do
-        @moduledoc false
-        use Ash.Resource,
-          data_layer: AshPostgres.DataLayer
+    # This used to raise an error, but now should only emit a warning and allow the module to compile
+    {_, io} =
+      with_io(:stderr, fn ->
+        defmodule Foo do
+          @moduledoc false
+          use Ash.Resource,
+            domain: nil,
+            data_layer: AshPostgres.DataLayer
 
-        postgres do
-          table("profile")
-          repo(AshPostgres.TestRepo)
-        end
+          postgres do
+            table("profile")
+            repo(AshPostgres.TestRepo)
+          end
 
-        attributes do
-          uuid_primary_key(:id, writable?: true)
-        end
+          attributes do
+            uuid_primary_key(:id, writable?: true)
+          end
 
-        actions do
-          defaults([:create, :read, :update, :destroy])
-        end
+          actions do
+            defaults([:create, :read, :update, :destroy])
+          end
 
-        relationships do
-          belongs_to(:author, AshPostgres.Test.Author)
-        end
+          relationships do
+            belongs_to(:author, AshPostgres.Test.Author) do
+              public?(true)
+            end
+          end
 
-        aggregates do
-          first(:author_badges, :author, :badges)
+          aggregates do
+            first(:author_badges, :author, :badges)
+          end
         end
-      end
-    end
+      end)
+
+    assert io =~ "Aggregate not supported"
   end
 
   test "related aggregates can be filtered on" do
     post =
       Post
-      |> Ash.Changeset.new(%{title: "title"})
-      |> Api.create!()
+      |> Ash.Changeset.for_create(:create, %{title: "title"})
+      |> Ash.create!()
 
     post2 =
       Post
-      |> Ash.Changeset.new(%{title: "title"})
-      |> Api.create!()
+      |> Ash.Changeset.for_create(:create, %{title: "title"})
+      |> Ash.create!()
 
     Comment
-    |> Ash.Changeset.new(%{title: "match"})
+    |> Ash.Changeset.for_create(:create, %{title: "match"})
     |> Ash.Changeset.manage_relationship(:post, post, type: :append_and_remove)
-    |> Api.create!()
+    |> Ash.create!()
 
     Comment
-    |> Ash.Changeset.new(%{title: "non_match"})
+    |> Ash.Changeset.for_create(:create, %{title: "non_match"})
     |> Ash.Changeset.manage_relationship(:post, post2, type: :append_and_remove)
-    |> Api.create!()
+    |> Ash.create!()
 
     Comment
-    |> Ash.Changeset.new(%{title: "non_match2"})
+    |> Ash.Changeset.for_create(:create, %{title: "non_match2"})
     |> Ash.Changeset.manage_relationship(:post, post2, type: :append_and_remove)
-    |> Api.create!()
+    |> Ash.create!()
 
     assert %{title: "match"} =
              Comment
              |> Ash.Query.filter(post.count_of_comments == 1)
-             |> Api.read_one!()
+             |> Ash.read_one!()
+  end
+
+  @tag :regression
+  test "aggregates with parent expressions in their filters are not grouped" do
+    post =
+      Post
+      |> Ash.Changeset.for_create(:create, %{title: "title"})
+      |> Ash.create!()
+
+    Comment
+    |> Ash.Changeset.for_create(:create, %{title: "title"})
+    |> Ash.Changeset.manage_relationship(:post, post, type: :append_and_remove)
+    |> Ash.create!()
+
+    Comment
+    |> Ash.Changeset.for_create(:create, %{title: "something else"})
+    |> Ash.Changeset.manage_relationship(:post, post, type: :append_and_remove)
+    |> Ash.create!()
+
+    assert %{count_of_comments: 2, count_of_comments_with_same_name: 1} =
+             post
+             |> Ash.load!([:count_of_comments, :count_of_comments_with_same_name])
   end
 
   describe "sum" do
     test "with no related data it returns nil" do
       post =
         Post
-        |> Ash.Changeset.new(%{title: "title"})
-        |> Api.create!()
+        |> Ash.Changeset.for_create(:create, %{title: "title"})
+        |> Ash.create!()
 
       assert %{sum_of_comment_likes: nil} =
                Post
                |> Ash.Query.filter(id == ^post.id)
                |> Ash.Query.load(:sum_of_comment_likes)
-               |> Api.read_one!()
+               |> Ash.read_one!()
     end
 
     test "with no related data and a default it returns the default" do
       post =
         Post
-        |> Ash.Changeset.new(%{title: "title"})
-        |> Api.create!()
+        |> Ash.Changeset.for_create(:create, %{title: "title"})
+        |> Ash.create!()
 
       assert %{sum_of_comment_likes_with_default: 0} =
                Post
                |> Ash.Query.filter(id == ^post.id)
                |> Ash.Query.load(:sum_of_comment_likes_with_default)
-               |> Api.read_one!()
+               |> Ash.read_one!()
     end
 
     test "with data, it returns the sum" do
       post =
         Post
-        |> Ash.Changeset.new(%{title: "title"})
-        |> Api.create!()
+        |> Ash.Changeset.for_create(:create, %{title: "title"})
+        |> Ash.create!()
 
       Comment
-      |> Ash.Changeset.new(%{title: "match", likes: 2})
+      |> Ash.Changeset.for_create(:create, %{title: "match", likes: 2})
       |> Ash.Changeset.manage_relationship(:post, post, type: :append_and_remove)
-      |> Api.create!()
+      |> Ash.create!()
 
       assert %{sum_of_comment_likes: 2} =
                Post
                |> Ash.Query.filter(id == ^post.id)
                |> Ash.Query.load(:sum_of_comment_likes)
-               |> Api.read_one!()
+               |> Ash.read_one!()
 
       Comment
-      |> Ash.Changeset.new(%{title: "match", likes: 3})
+      |> Ash.Changeset.for_create(:create, %{title: "match", likes: 3})
       |> Ash.Changeset.manage_relationship(:post, post, type: :append_and_remove)
-      |> Api.create!()
+      |> Ash.create!()
 
       assert %{sum_of_comment_likes: 5} =
                Post
                |> Ash.Query.filter(id == ^post.id)
                |> Ash.Query.load(:sum_of_comment_likes)
-               |> Api.read_one!()
+               |> Ash.read_one!()
     end
 
     test "with data and a filter, it returns the sum" do
       post =
         Post
-        |> Ash.Changeset.new(%{title: "title"})
-        |> Api.create!()
+        |> Ash.Changeset.for_create(:create, %{title: "title"})
+        |> Ash.create!()
 
       Comment
-      |> Ash.Changeset.new(%{title: "match", likes: 2})
+      |> Ash.Changeset.for_create(:create, %{title: "match", likes: 2})
       |> Ash.Changeset.manage_relationship(:post, post, type: :append_and_remove)
-      |> Api.create!()
+      |> Ash.create!()
 
       assert %{sum_of_comment_likes_called_match: 2} =
                Post
                |> Ash.Query.filter(id == ^post.id)
                |> Ash.Query.load(:sum_of_comment_likes_called_match)
-               |> Api.read_one!()
+               |> Ash.read_one!()
 
       Comment
-      |> Ash.Changeset.new(%{title: "not_match", likes: 3})
+      |> Ash.Changeset.for_create(:create, %{title: "not_match", likes: 3})
       |> Ash.Changeset.manage_relationship(:post, post, type: :append_and_remove)
-      |> Api.create!()
+      |> Ash.create!()
 
       assert %{sum_of_comment_likes_called_match: 2} =
                Post
                |> Ash.Query.filter(id == ^post.id)
                |> Ash.Query.load(:sum_of_comment_likes_called_match)
-               |> Api.read_one!()
+               |> Ash.read_one!()
     end
 
     test "filtering on a nested aggregate works" do
       Post
       |> Ash.Query.filter(count_of_comment_ratings == 0)
-      |> Api.read!()
+      |> Ash.read!()
     end
 
     test "nested aggregates show the proper values" do
       post =
         Post
-        |> Ash.Changeset.new(%{title: "title"})
-        |> Api.create!()
+        |> Ash.Changeset.for_create(:create, %{title: "title"})
+        |> Ash.create!()
 
       author =
         AshPostgres.Test.Author
-        |> Ash.Changeset.new(%{"first_name" => "ted"})
-        |> Api.create!()
+        |> Ash.Changeset.for_create(:create, %{"first_name" => "ted"})
+        |> Ash.create!()
 
       comment1 =
         Comment
-        |> Ash.Changeset.new(%{title: "match", likes: 2})
+        |> Ash.Changeset.for_create(:create, %{title: "match", likes: 2})
         |> Ash.Changeset.manage_relationship(:post, post, type: :append_and_remove)
         |> Ash.Changeset.manage_relationship(:author, author, type: :append_and_remove)
-        |> Api.create!()
+        |> Ash.create!()
 
       comment2 =
         Comment
-        |> Ash.Changeset.new(%{title: "match", likes: 2})
+        |> Ash.Changeset.for_create(:create, %{title: "match", likes: 2})
         |> Ash.Changeset.manage_relationship(:post, post, type: :append_and_remove)
         |> Ash.Changeset.manage_relationship(:author, author, type: :append_and_remove)
-        |> Api.create!()
+        |> Ash.create!()
 
       Rating
-      |> Ash.Changeset.new(%{score: 5, resource_id: comment1.id})
+      |> Ash.Changeset.for_create(:create, %{score: 5, resource_id: comment1.id})
       |> Ash.Changeset.set_context(%{data_layer: %{table: "comment_ratings"}})
-      |> Api.create!()
+      |> Ash.create!()
 
       Rating
-      |> Ash.Changeset.new(%{score: 10, resource_id: comment2.id})
+      |> Ash.Changeset.for_create(:create, %{score: 10, resource_id: comment2.id})
       |> Ash.Changeset.set_context(%{data_layer: %{table: "comment_ratings"}})
-      |> Api.create!()
+      |> Ash.create!()
 
       assert [%{count_of_comment_ratings: 2}] =
-               Post |> Ash.Query.load(:count_of_comment_ratings) |> Api.read!()
+               Post |> Ash.Query.load(:count_of_comment_ratings) |> Ash.read!()
 
       assert [%{highest_comment_rating: 10}] =
-               Post |> Ash.Query.load(:highest_comment_rating) |> Api.read!()
+               Post |> Ash.Query.load(:highest_comment_rating) |> Ash.read!()
 
       assert [%{lowest_comment_rating: 5}] =
-               Post |> Ash.Query.load(:lowest_comment_rating) |> Api.read!()
+               Post |> Ash.Query.load(:lowest_comment_rating) |> Ash.read!()
 
       assert [%{avg_comment_rating: 7.5}] =
-               Post |> Ash.Query.load(:avg_comment_rating) |> Api.read!()
+               Post |> Ash.Query.load(:avg_comment_rating) |> Ash.read!()
 
       # TODO: want to add an option for `unique` here at some point
       assert [%{comment_authors: "ted,ted"}] =
-               Post |> Ash.Query.load(:comment_authors) |> Api.read!()
+               Post |> Ash.Query.load(:comment_authors) |> Ash.read!()
     end
 
     test "nested filtered aggregates show the proper values" do
       post =
         Post
-        |> Ash.Changeset.new(%{title: "title"})
-        |> Api.create!()
+        |> Ash.Changeset.for_create(:create, %{title: "title"})
+        |> Ash.create!()
 
       comment1 =
         Comment
-        |> Ash.Changeset.new(%{title: "match", likes: 2})
+        |> Ash.Changeset.for_create(:create, %{title: "match", likes: 2})
         |> Ash.Changeset.manage_relationship(:post, post, type: :append_and_remove)
-        |> Api.create!()
+        |> Ash.create!()
 
       comment2 =
         Comment
-        |> Ash.Changeset.new(%{title: "match", likes: 2})
+        |> Ash.Changeset.for_create(:create, %{title: "match", likes: 2})
         |> Ash.Changeset.manage_relationship(:post, post, type: :append_and_remove)
-        |> Api.create!()
+        |> Ash.create!()
 
       Rating
-      |> Ash.Changeset.new(%{score: 20, resource_id: comment1.id})
+      |> Ash.Changeset.for_create(:create, %{score: 20, resource_id: comment1.id})
       |> Ash.Changeset.set_context(%{data_layer: %{table: "comment_ratings"}})
-      |> Api.create!()
+      |> Ash.create!()
 
       Rating
-      |> Ash.Changeset.new(%{score: 1, resource_id: comment2.id})
+      |> Ash.Changeset.for_create(:create, %{score: 1, resource_id: comment2.id})
       |> Ash.Changeset.set_context(%{data_layer: %{table: "comment_ratings"}})
-      |> Api.create!()
+      |> Ash.create!()
 
       assert [%{count_of_comment_ratings: 2, count_of_popular_comment_ratings: 1}] =
                Post
                |> Ash.Query.load([:count_of_comment_ratings, :count_of_popular_comment_ratings])
-               |> Api.read!()
+               |> Ash.read!()
 
       assert [%{count_of_comment_ratings: 2}] =
                Post
                |> Ash.Query.load([:count_of_comment_ratings])
-               |> Api.read!()
+               |> Ash.read!()
 
       assert [%{count_of_popular_comment_ratings: 1}] =
                Post
                |> Ash.Query.load([:count_of_popular_comment_ratings])
-               |> Api.read!()
+               |> Ash.read!()
     end
 
     test "nested filtered and sorted aggregates show the proper values" do
       post =
         Post
-        |> Ash.Changeset.new(%{title: "title"})
-        |> Api.create!()
+        |> Ash.Changeset.for_create(:create, %{title: "title"})
+        |> Ash.create!()
 
       comment1 =
         Comment
-        |> Ash.Changeset.new(%{title: "match", likes: 2})
+        |> Ash.Changeset.for_create(:create, %{title: "match", likes: 2})
         |> Ash.Changeset.manage_relationship(:post, post, type: :append_and_remove)
-        |> Api.create!()
+        |> Ash.create!()
 
       comment2 =
         Comment
-        |> Ash.Changeset.new(%{title: "match", likes: 2})
+        |> Ash.Changeset.for_create(:create, %{title: "match", likes: 2})
         |> Ash.Changeset.manage_relationship(:post, post, type: :append_and_remove)
-        |> Api.create!()
+        |> Ash.create!()
 
       Rating
-      |> Ash.Changeset.new(%{score: 20, resource_id: comment1.id})
+      |> Ash.Changeset.for_create(:create, %{score: 20, resource_id: comment1.id})
       |> Ash.Changeset.set_context(%{data_layer: %{table: "comment_ratings"}})
-      |> Api.create!()
+      |> Ash.create!()
 
       Rating
-      |> Ash.Changeset.new(%{score: 1, resource_id: comment2.id})
+      |> Ash.Changeset.for_create(:create, %{score: 1, resource_id: comment2.id})
       |> Ash.Changeset.set_context(%{data_layer: %{table: "comment_ratings"}})
-      |> Api.create!()
+      |> Ash.create!()
 
       assert [%{count_of_comment_ratings: 2, count_of_popular_comment_ratings: 1}] =
                Post
                |> Ash.Query.load([:count_of_comment_ratings, :count_of_popular_comment_ratings])
-               |> Api.read!()
+               |> Ash.read!()
     end
 
     test "nested first aggregate works" do
       post =
         Post
-        |> Ash.Changeset.new(%{title: "title"})
-        |> Api.create!()
+        |> Ash.Changeset.for_create(:create, %{title: "title"})
+        |> Ash.create!()
 
       comment =
         Comment
-        |> Ash.Changeset.new(%{title: "title", likes: 2})
+        |> Ash.Changeset.for_create(:create, %{title: "title", likes: 2})
         |> Ash.Changeset.manage_relationship(:post, post, type: :append_and_remove)
-        |> Api.create!()
+        |> Ash.create!()
 
       Rating
-      |> Ash.Changeset.new(%{score: 10, resource_id: comment.id})
+      |> Ash.Changeset.for_create(:create, %{score: 10, resource_id: comment.id})
       |> Ash.Changeset.set_context(%{data_layer: %{table: "comment_ratings"}})
-      |> Api.create!()
+      |> Ash.create!()
 
       post =
         Post
         |> Ash.Query.load(:highest_rating)
-        |> Api.read!()
+        |> Ash.read!()
         |> Enum.at(0)
 
       assert post.highest_rating == 10
@@ -858,17 +1805,17 @@ defmodule AshPostgres.AggregateTest do
     test "loading a nested aggregate works" do
       post =
         Post
-        |> Ash.Changeset.new(%{title: "title"})
-        |> Api.create!()
+        |> Ash.Changeset.for_create(:create, %{title: "title"})
+        |> Ash.create!()
 
       Comment
-      |> Ash.Changeset.new(%{title: "title", likes: 2})
+      |> Ash.Changeset.for_create(:create, %{title: "title", likes: 2})
       |> Ash.Changeset.manage_relationship(:post, post, type: :append_and_remove)
-      |> Api.create!()
+      |> Ash.create!()
 
       Post
       |> Ash.Query.load(:count_of_comment_ratings)
-      |> Api.read!()
+      |> Ash.read!()
       |> Enum.map(fn post ->
         assert post.count_of_comment_ratings == 0
       end)
@@ -877,55 +1824,55 @@ defmodule AshPostgres.AggregateTest do
     test "the sum can be filtered on when paginating" do
       post =
         Post
-        |> Ash.Changeset.new(%{title: "title"})
-        |> Api.create!()
+        |> Ash.Changeset.for_create(:create, %{title: "title"})
+        |> Ash.create!()
 
       Comment
-      |> Ash.Changeset.new(%{title: "match", likes: 2})
+      |> Ash.Changeset.for_create(:create, %{title: "match", likes: 2})
       |> Ash.Changeset.manage_relationship(:post, post, type: :append_and_remove)
-      |> Api.create!()
+      |> Ash.create!()
 
       assert %{sum_of_comment_likes_called_match: 2} =
                Post
                |> Ash.Query.filter(id == ^post.id)
                |> Ash.Query.load(:sum_of_comment_likes_called_match)
-               |> Api.read_one!()
+               |> Ash.read_one!()
 
       Comment
-      |> Ash.Changeset.new(%{title: "not_match", likes: 3})
+      |> Ash.Changeset.for_create(:create, %{title: "not_match", likes: 3})
       |> Ash.Changeset.manage_relationship(:post, post, type: :append_and_remove)
-      |> Api.create!()
+      |> Ash.create!()
 
       assert %Ash.Page.Offset{results: [%{sum_of_comment_likes_called_match: 2}]} =
                Post
                |> Ash.Query.filter(id == ^post.id)
                |> Ash.Query.load(:sum_of_comment_likes_called_match)
                |> Ash.Query.filter(sum_of_comment_likes_called_match == 2)
-               |> Api.read!(action: :paginated, page: [limit: 1, count: true])
+               |> Ash.read!(action: :paginated, page: [limit: 1, count: true])
 
       assert %Ash.Page.Offset{results: []} =
                Post
                |> Ash.Query.filter(id == ^post.id)
                |> Ash.Query.load(:sum_of_comment_likes_called_match)
                |> Ash.Query.filter(sum_of_comment_likes_called_match == 3)
-               |> Api.read!(action: :paginated, page: [limit: 1, count: true])
+               |> Ash.read!(action: :paginated, page: [limit: 1, count: true])
     end
 
     test "an aggregate on relationships with a filter returns the proper value" do
       post =
         Post
-        |> Ash.Changeset.new(%{title: "title", category: "foo"})
-        |> Api.create!()
+        |> Ash.Changeset.for_create(:create, %{title: "title", category: "foo"})
+        |> Ash.create!()
 
       Comment
       |> Ash.Changeset.for_create(:create, %{title: "match", likes: 20})
       |> Ash.Changeset.manage_relationship(:post, post, type: :append_and_remove)
-      |> Api.create!()
+      |> Ash.create!()
 
       Comment
       |> Ash.Changeset.for_create(:create, %{title: "match", likes: 17})
       |> Ash.Changeset.manage_relationship(:post, post, type: :append_and_remove)
-      |> Api.create!()
+      |> Ash.create!()
 
       Comment
       |> Ash.Changeset.for_create(:create, %{title: "match", likes: 50})
@@ -934,29 +1881,29 @@ defmodule AshPostgres.AggregateTest do
         DateTime.add(DateTime.utc_now(), :timer.hours(24) * -20, :second)
       )
       |> Ash.Changeset.manage_relationship(:post, post, type: :append_and_remove)
-      |> Api.create!()
+      |> Ash.create!()
 
       assert %Post{sum_of_recent_popular_comment_likes: 37} =
                Post
                |> Ash.Query.load(:sum_of_recent_popular_comment_likes)
-               |> Api.read_one!()
+               |> Ash.read_one!()
     end
 
     test "a count aggregate on relationships with a filter returns the proper value" do
       post =
         Post
-        |> Ash.Changeset.new(%{title: "title", category: "foo"})
-        |> Api.create!()
+        |> Ash.Changeset.for_create(:create, %{title: "title", category: "foo"})
+        |> Ash.create!()
 
       Comment
       |> Ash.Changeset.for_create(:create, %{title: "match", likes: 20})
       |> Ash.Changeset.manage_relationship(:post, post, type: :append_and_remove)
-      |> Api.create!()
+      |> Ash.create!()
 
       Comment
       |> Ash.Changeset.for_create(:create, %{title: "match", likes: 17})
       |> Ash.Changeset.manage_relationship(:post, post, type: :append_and_remove)
-      |> Api.create!()
+      |> Ash.create!()
 
       Comment
       |> Ash.Changeset.for_create(:create, %{title: "match", likes: 50})
@@ -965,143 +1912,193 @@ defmodule AshPostgres.AggregateTest do
         DateTime.add(DateTime.utc_now(), :timer.hours(24) * -20, :second)
       )
       |> Ash.Changeset.manage_relationship(:post, post, type: :append_and_remove)
-      |> Api.create!()
+      |> Ash.create!()
 
       assert %Post{count_of_recent_popular_comments: 2} =
                Post
                |> Ash.Query.load([
                  :count_of_recent_popular_comments
                ])
-               |> Api.read_one!()
+               |> Ash.read_one!()
     end
 
     test "a count aggregate with a related filter returns the proper value" do
       post =
         Post
-        |> Ash.Changeset.new(%{title: "title", category: "foo"})
-        |> Api.create!()
+        |> Ash.Changeset.for_create(:create, %{title: "title", category: "foo"})
+        |> Ash.create!()
 
       Comment
       |> Ash.Changeset.for_create(:create, %{title: "match"})
       |> Ash.Changeset.manage_relationship(:post, post, type: :append_and_remove)
-      |> Api.create!()
+      |> Ash.create!()
 
       Comment
       |> Ash.Changeset.for_create(:create, %{title: "match"})
       |> Ash.Changeset.manage_relationship(:post, post, type: :append_and_remove)
-      |> Api.create!()
+      |> Ash.create!()
 
       Comment
       |> Ash.Changeset.for_create(:create, %{title: "match"})
       |> Ash.Changeset.manage_relationship(:post, post, type: :append_and_remove)
-      |> Api.create!()
+      |> Ash.create!()
 
       assert %Post{count_of_comments_that_have_a_post: 3} =
                Post
                |> Ash.Query.load([
                  :count_of_comments_that_have_a_post
                ])
-               |> Api.read_one!()
+               |> Ash.read_one!()
     end
 
     test "a count aggregate with a related filter that uses `exists` returns the proper value" do
       post =
         Post
-        |> Ash.Changeset.new(%{title: "title", category: "foo"})
-        |> Api.create!()
+        |> Ash.Changeset.for_create(:create, %{title: "title", category: "foo"})
+        |> Ash.create!()
 
       Comment
       |> Ash.Changeset.for_create(:create, %{title: "match"})
       |> Ash.Changeset.manage_relationship(:post, post, type: :append_and_remove)
-      |> Api.create!()
+      |> Ash.create!()
 
       Comment
       |> Ash.Changeset.for_create(:create, %{title: "match"})
       |> Ash.Changeset.manage_relationship(:post, post, type: :append_and_remove)
-      |> Api.create!()
+      |> Ash.create!()
 
       Comment
       |> Ash.Changeset.for_create(:create, %{title: "match"})
       |> Ash.Changeset.manage_relationship(:post, post, type: :append_and_remove)
-      |> Api.create!()
+      |> Ash.create!()
 
       assert %Post{count_of_comments_that_have_a_post_with_exists: 3} =
                Post
                |> Ash.Query.load([
                  :count_of_comments_that_have_a_post_with_exists
                ])
-               |> Api.read_one!()
+               |> Ash.read_one!()
     end
 
     test "a count with a filter that references a relationship that also has a filter" do
       post =
         Post
-        |> Ash.Changeset.new(%{title: "title", category: "foo"})
-        |> Api.create!()
+        |> Ash.Changeset.for_create(:create, %{title: "title", category: "foo"})
+        |> Ash.create!()
 
       comment =
         Comment
         |> Ash.Changeset.for_create(:create, %{title: "match"})
         |> Ash.Changeset.manage_relationship(:post, post, type: :append_and_remove)
-        |> Api.create!()
+        |> Ash.create!()
 
       comment2 =
         Comment
         |> Ash.Changeset.for_create(:create, %{title: "match"})
         |> Ash.Changeset.manage_relationship(:post, post, type: :append_and_remove)
-        |> Api.create!()
+        |> Ash.create!()
 
       Rating
       |> Ash.Changeset.for_create(:create, %{score: 10, resource_id: comment.id})
       |> Ash.Changeset.set_context(%{data_layer: %{table: "comment_ratings"}})
-      |> Api.create!()
+      |> Ash.create!()
 
       Rating
       |> Ash.Changeset.for_create(:create, %{score: 1, resource_id: comment2.id})
       |> Ash.Changeset.set_context(%{data_layer: %{table: "comment_ratings"}})
-      |> Api.create!()
+      |> Ash.create!()
 
       assert %Post{count_of_popular_comments: 1} =
                Post
                |> Ash.Query.load([
                  :count_of_popular_comments
                ])
-               |> Api.read_one!()
+               |> Ash.read_one!()
     end
 
     test "a count with a filter that references a to many relationship can be aggregated at the query level" do
       Post
       |> Ash.Query.filter(comments.likes > 10)
-      |> Api.count!()
+      |> Ash.count!()
+    end
+
+    test "a list with a filter that references a to many relationship can be aggregated at the query level" do
+      Post
+      |> Ash.Query.filter(comments.likes > 10)
+      |> Ash.list!(:title)
+    end
+
+    test "a count with a limit and a filter can be aggregated at the query level" do
+      Post
+      |> Ash.Changeset.for_create(:create, %{title: "foo"})
+      |> Ash.create!()
+
+      Post
+      |> Ash.Changeset.for_create(:create, %{title: "foo"})
+      |> Ash.create!()
+
+      assert 1 =
+               Post
+               |> Ash.Query.for_read(:title_is_foo)
+               |> Ash.Query.limit(1)
+               |> Ash.count!()
+    end
+
+    test "a count can filter independently of the query" do
+      assert {:ok, %{count: 0, count2: 0}} =
+               Post
+               |> Ash.aggregate([
+                 {:count, :count, query: [filter: Ash.Expr.expr(comments.likes > 10)]},
+                 {:count2, :count, query: [filter: Ash.Expr.expr(comments.likes < 10)]}
+               ])
+    end
+
+    test "multiple aggregates will be grouped up if possible" do
+      assert {:ok, %{count: 0, count2: 0}} =
+               Post
+               |> Ash.aggregate([
+                 {:count, :count,
+                  query: [
+                    filter:
+                      Ash.Expr.expr(author.first_name == "fred" and author.last_name == "weasley")
+                  ]},
+                 {:count2, :count,
+                  query: [
+                    filter:
+                      Ash.Expr.expr(
+                        author.first_name == "george" and author.last_name == "weasley"
+                      )
+                  ]}
+               ])
     end
 
     test "a count with a filter that references a relationship combined with another" do
       post =
         Post
-        |> Ash.Changeset.new(%{title: "title", category: "foo"})
-        |> Api.create!()
+        |> Ash.Changeset.for_create(:create, %{title: "title", category: "foo"})
+        |> Ash.create!()
 
       comment =
         Comment
         |> Ash.Changeset.for_create(:create, %{title: "match"})
         |> Ash.Changeset.manage_relationship(:post, post, type: :append_and_remove)
-        |> Api.create!()
+        |> Ash.create!()
 
       comment2 =
         Comment
         |> Ash.Changeset.for_create(:create, %{title: "match"})
         |> Ash.Changeset.manage_relationship(:post, post, type: :append_and_remove)
-        |> Api.create!()
+        |> Ash.create!()
 
       Rating
       |> Ash.Changeset.for_create(:create, %{score: 10, resource_id: comment.id})
       |> Ash.Changeset.set_context(%{data_layer: %{table: "comment_ratings"}})
-      |> Api.create!()
+      |> Ash.create!()
 
       Rating
       |> Ash.Changeset.for_create(:create, %{score: 1, resource_id: comment2.id})
       |> Ash.Changeset.set_context(%{data_layer: %{table: "comment_ratings"}})
-      |> Api.create!()
+      |> Ash.create!()
 
       assert %Post{count_of_popular_comments: 1} =
                Post
@@ -1109,7 +2106,573 @@ defmodule AshPostgres.AggregateTest do
                  :count_of_comments,
                  :count_of_popular_comments
                ])
-               |> Api.read_one!()
+               |> Ash.read_one!()
+    end
+  end
+
+  @tag :regression
+  test "filter and aggregate names do not collide with the same names" do
+    club = Ash.Seed.seed!(AshPostgres.Test.StandupClub, %{name: "Studio 54"})
+
+    club_comedians =
+      Enum.map([1, 2, 3], fn idx ->
+        Ash.Seed.seed!(AshPostgres.Test.Comedian, %{
+          name: "Bill Burr-#{idx}",
+          standup_club_id: club.id
+        })
+      end)
+
+    Enum.each(club_comedians, fn comedian ->
+      Range.new(1, Enum.random([2, 3, 4, 5, 6]))
+      |> Enum.each(fn joke_idx ->
+        joke =
+          Ash.Seed.seed!(AshPostgres.Test.Joke, %{
+            comedian_id: comedian.id,
+            text: "Haha I am a joke number #{joke_idx}"
+          })
+
+        Range.new(1, Enum.random([2, 3, 4, 5, 6]))
+        |> Enum.each(fn _idx ->
+          Ash.Seed.seed!(AshPostgres.Test.Punchline, %{joke_id: joke.id})
+        end)
+      end)
+    end)
+
+    Range.new(1, Enum.random([2, 3, 4, 5, 6]))
+    |> Enum.each(fn joke_idx ->
+      joke =
+        Ash.Seed.seed!(AshPostgres.Test.Joke, %{
+          standup_club_id: club.id,
+          text: "Haha I am a club joke number #{joke_idx}"
+        })
+
+      Range.new(1, Enum.random([2, 3, 4, 5, 6]))
+      |> Enum.each(fn _idx ->
+        Ash.Seed.seed!(AshPostgres.Test.Punchline, %{joke_id: joke.id})
+      end)
+    end)
+
+    filter = %{
+      comedians: %{
+        jokes: %{
+          punchline_count: %{
+            greater_than: 0
+          }
+        }
+      }
+    }
+
+    Ash.Query.filter_input(AshPostgres.Test.StandupClub, filter)
+    |> Ash.read!(load: [:punchline_count])
+  end
+
+  @tag :regression
+  test "aggregates with modify_query raise an appropriate error" do
+    assert_raise Ash.Error.Unknown, ~r/does not currently support aggregates/, fn ->
+      Post
+      |> Ash.Query.load([
+        :count_comments_with_modify_query
+      ])
+      |> Ash.read_one!()
+    end
+  end
+
+  @tag :regression
+  test "count is accurate" do
+    org =
+      AshPostgres.Test.Organization
+      |> Ash.Changeset.for_create(:create, %{name: "Test Org"})
+      |> Ash.create!()
+
+    user =
+      AshPostgres.Test.User
+      |> Ash.Changeset.for_create(:create, %{name: "test_user", organization_id: org.id})
+      |> Ash.create!()
+
+    AshPostgres.Test.User
+    |> Ash.Changeset.for_create(:create, %{name: "another_user", organization_id: org.id})
+    |> Ash.create!()
+
+    author =
+      AshPostgres.Test.Author
+      |> Ash.Changeset.for_create(:create, %{first_name: "Test", last_name: "Author"})
+      |> Ash.create!()
+
+    post =
+      AshPostgres.Test.Post
+      |> Ash.Changeset.for_create(:create, %{
+        title: "Test Post",
+        organization_id: org.id,
+        author_id: author.id
+      })
+      |> Ash.create!()
+
+    AshPostgres.Test.Comment
+    |> Ash.Changeset.for_create(:create, %{
+      title: "First comment",
+      post_id: post.id,
+      author_id: author.id
+    })
+    |> Ash.create!()
+
+    loaded_post =
+      AshPostgres.Test.Post
+      |> Ash.Query.filter(id == ^post.id)
+      |> Ash.Query.load(:count_of_comments)
+      |> Ash.read_one!(actor: user)
+
+    assert loaded_post.count_of_comments == 1
+  end
+
+  test "aggregate with sort and limit is accurate" do
+    # Setup: Create an author with multiple posts
+    author =
+      Author
+      |> Ash.Changeset.for_create(:create, %{first_name: "John", last_name: "Doe"})
+      |> Ash.create!()
+
+    # Create posts with different titles to test sorting
+    post1 =
+      Post
+      |> Ash.Changeset.for_create(:create, %{title: "A First Post"})
+      |> Ash.Changeset.manage_relationship(:author, author, type: :append_and_remove)
+      |> Ash.create!()
+
+    post2 =
+      Post
+      |> Ash.Changeset.for_create(:create, %{title: "Z Last Post"})
+      |> Ash.Changeset.manage_relationship(:author, author, type: :append_and_remove)
+      |> Ash.create!()
+
+    post3 =
+      Post
+      |> Ash.Changeset.for_create(:create, %{title: "M Middle Post"})
+      |> Ash.Changeset.manage_relationship(:author, author, type: :append_and_remove)
+      |> Ash.create!()
+
+    # Add comments to posts
+    Comment
+    |> Ash.Changeset.for_create(:create, %{title: "Comment 1"})
+    |> Ash.Changeset.manage_relationship(:post, post1, type: :append_and_remove)
+    |> Ash.create!()
+
+    Comment
+    |> Ash.Changeset.for_create(:create, %{title: "Comment 2"})
+    |> Ash.Changeset.manage_relationship(:post, post1, type: :append_and_remove)
+    |> Ash.create!()
+
+    Comment
+    |> Ash.Changeset.for_create(:create, %{title: "Comment 3"})
+    |> Ash.Changeset.manage_relationship(:post, post2, type: :append_and_remove)
+    |> Ash.create!()
+
+    Comment
+    |> Ash.Changeset.for_create(:create, %{title: "Comment 4"})
+    |> Ash.Changeset.manage_relationship(:post, post3, type: :append_and_remove)
+    |> Ash.create!()
+
+    # Query with aggregate, sort, and limit
+    # This should ideally use a subquery to apply sort/limit before loading the aggregate
+    results =
+      Post
+      |> Ash.Query.load(:count_of_comments)
+      |> Ash.Query.sort(:title)
+      |> Ash.Query.limit(2)
+      |> Ash.read!()
+
+    # Verify we got the right posts (sorted by title, limited to 2)
+    assert length(results) == 2
+    assert Enum.at(results, 0).title == "A First Post"
+    assert Enum.at(results, 1).title == "M Middle Post"
+
+    # Verify the aggregates are correct
+    assert Enum.at(results, 0).count_of_comments == 2
+    assert Enum.at(results, 1).count_of_comments == 1
+  end
+
+  test "aggregate with sort by aggregate value and limit is accurate" do
+    # This tests sorting by the aggregate itself, not by another field
+    author =
+      Author
+      |> Ash.Changeset.for_create(:create, %{first_name: "Jane", last_name: "Smith"})
+      |> Ash.create!()
+
+    # Create posts with different numbers of comments
+    post1 =
+      Post
+      |> Ash.Changeset.for_create(:create, %{title: "Post with 3 comments"})
+      |> Ash.Changeset.manage_relationship(:author, author, type: :append_and_remove)
+      |> Ash.create!()
+
+    post2 =
+      Post
+      |> Ash.Changeset.for_create(:create, %{title: "Post with 1 comment"})
+      |> Ash.Changeset.manage_relationship(:author, author, type: :append_and_remove)
+      |> Ash.create!()
+
+    post3 =
+      Post
+      |> Ash.Changeset.for_create(:create, %{title: "Post with 2 comments"})
+      |> Ash.Changeset.manage_relationship(:author, author, type: :append_and_remove)
+      |> Ash.create!()
+
+    # Add varying numbers of comments
+    for _i <- 1..3 do
+      Comment
+      |> Ash.Changeset.for_create(:create, %{title: "Comment on post 1"})
+      |> Ash.Changeset.manage_relationship(:post, post1, type: :append_and_remove)
+      |> Ash.create!()
+    end
+
+    Comment
+    |> Ash.Changeset.for_create(:create, %{title: "Comment on post 2"})
+    |> Ash.Changeset.manage_relationship(:post, post2, type: :append_and_remove)
+    |> Ash.create!()
+
+    for _i <- 1..2 do
+      Comment
+      |> Ash.Changeset.for_create(:create, %{title: "Comment on post 3"})
+      |> Ash.Changeset.manage_relationship(:post, post3, type: :append_and_remove)
+      |> Ash.create!()
+    end
+
+    # Query sorting by the aggregate value itself
+    results =
+      Post
+      |> Ash.Query.load(:count_of_comments)
+      |> Ash.Query.sort(count_of_comments: :desc)
+      |> Ash.Query.limit(2)
+      |> Ash.read!()
+
+    # Should get the posts with most comments first
+    assert length(results) == 2
+    assert Enum.at(results, 0).count_of_comments == 3
+    assert Enum.at(results, 1).count_of_comments == 2
+  end
+
+  describe "aggregate with parent filter and limited select" do
+    test "FAILS when combining select() + limit() with aggregate using parent() in filter" do
+      # BUG: When using select() + limit() with an aggregate that uses parent()
+      # in its filter, the query generation creates a subquery that's missing the parent
+      # fields, causing a SQL error.
+      #
+      # This bug was found in ash_graphql where GraphQL list queries with pagination
+      # would fail when loading aggregates that use parent() in filters.
+      #
+      # The bug requires BOTH conditions:
+      # 1. select() limits which fields are included (e.g., only :id)
+      # 2. limit() causes a subquery to be generated
+      # 3. An aggregate filter references parent() fields that aren't in select()
+      #
+      # Without BOTH select() and limit(), the query works fine (see tests below).
+      #
+      # Current error:
+      # ERROR 42703 (undefined_column) column s0.last_read_message_id does not exist
+      #
+      # Generated query:
+      # SELECT s0."id", coalesce(s1."unread_message_count"::bigint, ...)
+      # FROM (SELECT sc0."id" AS "id" FROM "chats" AS sc0 LIMIT 10) AS s0
+      # LEFT OUTER JOIN LATERAL (
+      #   SELECT ... FROM "messages" WHERE ... s0."last_read_message_id" ...  # <- field not in subquery!
+      # ) AS s1 ON TRUE
+      #
+      # Expected fix: Ash should automatically include parent() referenced fields
+      # (like last_read_message_id) in the subquery even if not explicitly selected.
+
+      Chat
+      |> Ash.Query.select([:id, :last_read_message_id])
+      |> Ash.Query.load(:unread_message_count)
+      |> Ash.Query.limit(10)
+      |> Ash.read!()
+    end
+
+    test "works WITHOUT select() - limit alone doesn't cause the bug" do
+      Chat
+      |> Ash.Query.load(:unread_message_count)
+      |> Ash.Query.limit(10)
+      |> Ash.read!()
+    end
+
+    test "works WITHOUT limit() - select alone doesn't cause the bug" do
+      Chat
+      |> Ash.Query.select(:id)
+      |> Ash.Query.load(:unread_message_count)
+      |> Ash.read!()
+    end
+
+    test "works when selecting the parent() referenced field explicitly (workaround)" do
+      Chat
+      |> Ash.Query.select([:id, :last_read_message_id])
+      |> Ash.Query.load(:unread_message_count)
+      |> Ash.Query.limit(10)
+      |> Ash.read!()
+    end
+  end
+
+  test "load aggregate with select and sort on from_many relationship" do
+    author =
+      Author
+      |> Ash.Changeset.for_create(:create, %{first_name: "John", last_name: "Doe"})
+      |> Ash.create!()
+
+    post =
+      Post
+      |> Ash.Changeset.for_create(:create, %{title: "Test Post"})
+      |> Ash.Changeset.manage_relationship(:author, author, type: :append_and_remove)
+      |> Ash.create!()
+
+    Comment
+    |> Ash.Changeset.for_create(:create, %{title: "Test Comment"})
+    |> Ash.Changeset.manage_relationship(:post, post, type: :append_and_remove)
+    |> Ash.create!()
+
+    results =
+      Post
+      |> Ash.Query.filter(id == ^post.id)
+      |> Ash.Query.select([:id, :title])
+      |> Ash.Query.sort([{Ash.Sort.expr_sort(expr(latest_comment.created_at)), :desc}])
+      |> Ash.Query.load(:author_first_name)
+      |> Ash.read!()
+
+    assert Enum.count(results) == 1
+    assert List.first(results).author_first_name == "John"
+  end
+
+  test "aggregate with parent() ref in relationship filter and sorting on relationship field" do
+    chat_1 =
+      Chat
+      |> Ash.Changeset.for_create(:create, %{name: "Test Chat"})
+      |> Ash.create!()
+
+    chat_1_message_1 =
+      AshPostgres.Test.Message
+      |> Ash.Changeset.for_create(:create, %{
+        chat_id: chat_1.id,
+        content: "First message",
+        sent_at: DateTime.add(DateTime.utc_now(), -3600, :second)
+      })
+      |> Ash.create!()
+
+    _chat_1_message_2 =
+      AshPostgres.Test.Message
+      |> Ash.Changeset.for_create(:create, %{
+        chat_id: chat_1.id,
+        content: "Second message",
+        sent_at: DateTime.add(DateTime.utc_now(), -1800, :second)
+      })
+      |> Ash.create!()
+
+    # Update chat to set last_read_message to the first message
+    # This means message_2 should be "unread"
+    _chat =
+      chat_1
+      |> Ash.Changeset.for_update(:update, %{last_read_message_id: chat_1_message_1.id})
+      |> Ash.update!()
+
+    # Create a second chat to force multiple records and trigger DISTINCT ON
+    chat_2 =
+      Chat
+      |> Ash.Changeset.for_create(:create, %{name: "Test Chat 2"})
+      |> Ash.create!()
+
+    chat_2_message_1 =
+      AshPostgres.Test.Message
+      |> Ash.Changeset.for_create(:create, %{
+        chat_id: chat_2.id,
+        content: "Chat 2 - Message 1",
+        sent_at: DateTime.add(DateTime.utc_now(), -100, :second)
+      })
+      |> Ash.create!()
+
+    AshPostgres.Test.Message
+    |> Ash.Changeset.for_create(:create, %{
+      chat_id: chat_2.id,
+      content: "Chat 2 - Message 2",
+      sent_at: DateTime.utc_now()
+    })
+    |> Ash.create!()
+
+    chat_2
+    |> Ash.Changeset.for_update(:update, %{last_read_message_id: chat_2_message_1.id})
+    |> Ash.update!()
+
+    # This query exercises the following conditions:
+    # - select() excludes last_read_message_id from the query
+    # - Sorting by last_message.sent_at (has_one from_many?) causes DISTINCT ON + subquery wrapping
+    # - Loading unread_messages_count_alt (aggregate on relationship with parent() in filter)
+    #   uses a lateral join that references parent(last_read_message_id)
+    # - The wrapped subquery must include last_read_message_id for the lateral join to work
+    result =
+      Chat
+      |> Ash.Query.filter(id in [^chat_1.id, ^chat_2.id])
+      |> Ash.Query.select([:id, :name])
+      |> Ash.Query.load(:unread_messages_count_alt)
+      |> Ash.Query.sort([{Ash.Sort.expr_sort(expr(last_message.sent_at)), :asc}])
+      |> Ash.read!()
+
+    assert length(result) == 2
+  end
+
+  test "multiple aggregates filtering on nested first aggregate" do
+    post =
+      Post
+      |> Ash.Changeset.for_create(:create, %{title: "test"})
+      |> Ash.create!()
+
+    comment =
+      Comment
+      |> Ash.Changeset.for_create(:create, %{title: "comment"})
+      |> Ash.Changeset.manage_relationship(:post, post, type: :append_and_remove)
+      |> Ash.create!()
+
+    Rating
+    |> Ash.Changeset.for_create(:create, %{score: 10, resource_id: comment.id})
+    |> Ash.Changeset.set_context(%{data_layer: %{table: "comment_ratings"}})
+    |> Ash.create!()
+
+    # ERROR 42803 (grouping_error) aggregate functions are not allowed in FILTER
+    #
+    # Multiple Post aggregates filter on Comment.latest_rating_score (a first aggregate)
+    # AshPostgres includes ss1.latest_rating_score in SELECT but not in GROUP BY
+    #  error: column "ss1.latest_rating_score" must appear in the GROUP BY clause
+    #
+    # This regression was introduced by ash_sql bb458d56
+    assert {:ok, _} =
+             Post
+             |> Ash.Query.load([
+               :count_of_comments_with_ratings,
+               :count_of_comments_with_high_ratings
+             ])
+             |> Ash.read()
+  end
+
+  describe "page with count and aggregates with relationship-based calculations" do
+    test "loads relationship-based calculations correctly when using page(count: true) with aggregates" do
+      # This test reproduces the bug from https://github.com/ash-project/ash_sql/issues/191
+      # When using page(count: true) with both an aggregate and a calculation that depends on
+      # a relationship, the calculation fails to load (remains #Ash.NotLoaded)
+
+      # Create test data
+      author =
+        Author
+        |> Ash.Changeset.for_create(:create, %{
+          first_name: "John",
+          last_name: "Doe"
+        })
+        |> Ash.create!()
+
+      post =
+        Post
+        |> Ash.Changeset.for_create(:create, %{
+          title: "Test Post"
+        })
+        |> Ash.Changeset.manage_relationship(:author, author, type: :append_and_remove)
+        |> Ash.create!()
+
+      Comment
+      |> Ash.Changeset.for_create(:create, %{title: "Test Comment"})
+      |> Ash.Changeset.manage_relationship(:post, post, type: :append_and_remove)
+      |> Ash.create!()
+
+      # Test without page(count: true) - should work
+      result_without_page_count =
+        Post
+        |> Ash.Query.filter(id == ^post.id)
+        |> Ash.Query.load([
+          # aggregate
+          :count_of_comments,
+          # calculation that depends on author relationship
+          :author_first_name_calc
+        ])
+        |> Ash.read_one!()
+
+      assert result_without_page_count.count_of_comments == 1
+      assert result_without_page_count.author_first_name_calc == "John"
+
+      # Test with page(count: true) - this triggers the bug
+      %{results: [result_with_page_count | _]} =
+        Post
+        |> Ash.Query.filter(id == ^post.id)
+        |> Ash.Query.load([
+          # aggregate
+          :count_of_comments,
+          # calculation that depends on author relationship
+          :author_first_name_calc
+        ])
+        |> Ash.Query.page(limit: 50, offset: 0, count: true)
+        |> Ash.read!()
+
+      # Both should be loaded correctly
+      assert result_with_page_count.count_of_comments == 1
+      # This assertion should fail if the bug is present
+      assert result_with_page_count.author_first_name_calc == "John",
+             "Calculation was not loaded when using page(count: true) with aggregates"
+    end
+  end
+
+  describe "join_filters in aggregate calculations" do
+    test "Ash.Filter structs in join_filters are properly converted to Ecto expressions" do
+      # This test reproduces the bug where Ash.Filter structs in join_filters
+      # are not properly converted to Ecto dynamic expressions, causing:
+      #   ** (Ecto.Query.CastError) value `#Ash.Filter<...>` in `where` cannot be cast to type :boolean
+      #
+      # The root cause is in ash_sql/lib/expr.ex - when a BooleanExpression contains
+      # an Ash.Filter struct as an operand, the private do_dynamic_expr/default_dynamic_expr
+      # functions don't have a clause to handle it, so the Ash.Filter is passed directly
+      # to Ecto instead of being converted to a dynamic expression.
+      #
+      # The bug triggers when authorization policies create Ash.Filter structs that get
+      # combined with join_filter expressions in BooleanExpressions.
+
+      # Set up authorization chain: User -> Organization -> Post -> Comment
+      org =
+        Organization
+        |> Ash.Changeset.for_create(:create, %{name: "Test Org"})
+        |> Ash.create!()
+
+      user =
+        User
+        |> Ash.Changeset.for_create(:create, %{})
+        |> Ash.Changeset.manage_relationship(:organization, org, type: :append_and_remove)
+        |> Ash.create!()
+
+      author =
+        Author
+        |> Ash.Changeset.for_create(:create, %{first_name: "Test", last_name: "Author"})
+        |> Ash.create!()
+
+      post =
+        Post
+        |> Ash.Changeset.for_create(:create, %{title: "test"})
+        |> Ash.Changeset.manage_relationship(:organization, org, type: :append_and_remove)
+        |> Ash.Changeset.manage_relationship(:author, author, type: :append_and_remove)
+        |> Ash.create!()
+
+      comment =
+        Comment
+        |> Ash.Changeset.for_create(:create, %{title: "comment", likes: 5})
+        |> Ash.Changeset.manage_relationship(:post, post, type: :append_and_remove)
+        |> Ash.Changeset.manage_relationship(:author, author, type: :append_and_remove)
+        |> Ash.create!()
+
+      Rating
+      |> Ash.Changeset.for_create(:create, %{score: 10, resource_id: comment.id})
+      |> Ash.Changeset.set_context(%{data_layer: %{table: "comment_ratings"}})
+      |> Ash.create!()
+
+      # This triggers the bug - loading a calculation that uses join_filters with actor reference.
+      # The join_filter `expr(author_id == ^actor(:id))` gets resolved to an Ash.Filter struct
+      # which is then combined with authorization policy filters in a BooleanExpression.
+      assert {:ok, [loaded_post]} =
+               Post
+               |> Ash.Query.filter(id == ^post.id)
+               |> Ash.Query.load(:max_rating_with_join_filter)
+               |> Ash.read(actor: user)
+
+      # The rating won't match because the comment's author_id doesn't match user.id,
+      # but the important thing is the query executes without CastError
+      assert is_nil(loaded_post.max_rating_with_join_filter) or
+               loaded_post.max_rating_with_join_filter == 10
     end
   end
 end

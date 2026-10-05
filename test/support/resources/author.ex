@@ -1,37 +1,154 @@
+# SPDX-FileCopyrightText: 2019 ash_postgres contributors <https://github.com/ash-project/ash_postgres/graphs/contributors>
+#
+# SPDX-License-Identifier: MIT
+
 defmodule AshPostgres.Test.Author do
   @moduledoc false
   use Ash.Resource,
+    domain: AshPostgres.Test.Domain,
     data_layer: AshPostgres.DataLayer
+
+  defmodule RuntimeFullName do
+    @moduledoc false
+    use Ash.Resource.Calculation
+
+    def calculate(records, _, _) do
+      Enum.map(records, fn record ->
+        record.first_name <> " " <> record.last_name
+      end)
+    end
+  end
+
+  defmodule TrueIfActorInContext do
+    @moduledoc """
+    An example of a calculation that references the actor from context, in a trivial way for demonstration purposes.
+    """
+    use Ash.Resource.Calculation
+
+    def expression(_opts, context) do
+      actor = context.actor
+
+      if is_nil(actor) do
+        expr(false)
+      else
+        expr(true)
+      end
+    end
+  end
 
   postgres do
     table("authors")
     repo(AshPostgres.TestRepo)
+
+    migration_types bios: :jsonb, settings: :jsonb, identities: :jsonb
+    storage_types(bios: :jsonb, settings: :jsonb, identities: :jsonb)
   end
 
   attributes do
     uuid_primary_key(:id, writable?: true)
-    attribute(:first_name, :string)
-    attribute(:last_name, :string)
-    attribute(:bio, AshPostgres.Test.Bio)
-    attribute(:badges, {:array, :atom})
+    attribute(:first_name, :string, public?: true)
+    attribute(:last_name, :string, public?: true)
+    attribute(:bio, AshPostgres.Test.Bio, public?: true)
+    attribute(:bios, {:array, :map}, public?: true)
+    attribute(:badges, {:array, :atom}, public?: true)
+    attribute(:settings, AshPostgres.Test.Settings, public?: true)
+    attribute(:identities, {:array, AshPostgres.Test.Identity}, public?: true)
+    attribute(:preferences, {:array, AshPostgres.Test.Preference}, public?: true)
   end
 
   actions do
-    defaults([:create, :read, :update, :destroy])
+    default_accept(:*)
+
+    defaults([:create, :read, :destroy])
+
+    update :update do
+      primary?(true)
+    end
   end
 
   relationships do
-    has_one(:profile, AshPostgres.Test.Profile)
-    has_many(:posts, AshPostgres.Test.Post)
+    has_one(:profile, AshPostgres.Test.Profile) do
+      public?(true)
+    end
+
+    has_many(:posts, AshPostgres.Test.Post) do
+      public?(true)
+    end
+
+    has_many :authors_with_same_first_name, __MODULE__ do
+      public?(true)
+      source_attribute(:first_name)
+      destination_attribute(:first_name)
+      filter(expr(parent(id) != id))
+    end
+
+    has_many :credited_posts, AshPostgres.Test.CoAuthorPost do
+      public?(true)
+
+      destination_attribute(:author_id)
+    end
+
+    many_to_many :all_co_authored_posts, AshPostgres.Test.Post do
+      public?(true)
+      join_relationship(:credited_posts)
+      source_attribute_on_join_resource(:author_id)
+      destination_attribute_on_join_resource(:post_id)
+    end
+
+    many_to_many :writer_of, AshPostgres.Test.Post do
+      public?(true)
+      join_relationship(:credited_posts)
+      source_attribute_on_join_resource(:author_id)
+      destination_attribute_on_join_resource(:post_id)
+      filter(expr(parent(credited_posts.role) == :writer))
+    end
+
+    many_to_many :editor_of, AshPostgres.Test.Post do
+      public?(true)
+      join_relationship(:credited_posts)
+      source_attribute_on_join_resource(:author_id)
+      destination_attribute_on_join_resource(:post_id)
+      filter(expr(parent(credited_posts.role) == :editor))
+    end
+
+    many_to_many :cancelled_co_authored_posts, AshPostgres.Test.Post do
+      public?(true)
+      join_relationship(:credited_posts)
+      filter(expr(not is_nil(parent(credited_posts.was_cancelled_at))))
+    end
   end
 
   aggregates do
     first(:profile_description, :profile, :description)
+    count(:count_of_posts, :posts)
+    first(:latest_comment_title_across_posts, [:posts, :latest_comment], :title)
   end
 
   calculations do
+    calculate(
+      :description,
+      :string,
+      expr(
+        if is_nil(^actor(:id)) do
+          "no actor"
+        else
+          profile_description
+        end
+      )
+    )
+
+    calculate(:count_of_posts_with_calc, :integer, expr(count(posts, [])))
+
     calculate(:title, :string, expr(bio[:title]))
     calculate(:full_name, :string, expr(first_name <> " " <> last_name))
+    calculate(:runtime_full_name, :string, RuntimeFullName)
+
+    calculate(
+      :expr_referencing_runtime,
+      :string,
+      expr(runtime_full_name <> " " <> runtime_full_name)
+    )
+
     calculate(:full_name_with_nils, :string, expr(string_join([first_name, last_name], " ")))
     calculate(:full_name_with_nils_no_joiner, :string, expr(string_join([first_name, last_name])))
     calculate(:split_full_name, {:array, :string}, expr(string_split(full_name)))
@@ -80,5 +197,59 @@ defmodule AshPostgres.Test.Author do
               {AshPostgres.Test.Concat, keys: [:first_name, :last_name]} do
       argument(:separator, :string, default: " ", constraints: [allow_empty?: true, trim?: false])
     end
+
+    calculate(:has_posts, :boolean, expr(exists(posts, true == true)))
+    calculate(:has_no_posts, :boolean, expr(has_posts == false))
+
+    calculate(
+      :has_post_with_title_matching_first_name,
+      :boolean,
+      expr(exists(posts, title == parent(first_name)))
+    )
+
+    # When used standalone on a Post, parent(title) correctly refers to the Post.
+    # But when used inside exists(posts, ...) from Author, parent(title) incorrectly
+    # resolves to Author (which doesn't have a title column).
+    calculate(
+      :has_post_matching_author_via_nested_exists,
+      :boolean,
+      expr(exists(posts, has_matching_author_by_unrelated_exists))
+    )
+
+    calculate(:profile_description_calc, :string, expr(profile.description), allow_nil?: true)
+
+    calculate :non_field_full_name, :string, expr(first_name <> " " <> last_name) do
+      field?(false)
+    end
+
+    calculate :non_field_refers_to_field_calc,
+              :string,
+              expr(full_name <> " (" <> non_field_full_name <> ")") do
+      field?(false)
+    end
+
+    calculate(:true_if_actor_in_context, :boolean, TrueIfActorInContext)
+
+    calculate(
+      :true_if_actor_in_context_nested,
+      :boolean,
+      expr(true_if_actor_in_context and fragment("1 = 1"))
+    )
+  end
+
+  aggregates do
+    count :count_of_posts_with_better_comment, [:posts, :comments] do
+      join_filter([:posts, :comments], expr(parent(score) < likes))
+    end
+
+    exists :has_post_with_better_comment, [:posts, :comments] do
+      join_filter([:posts, :comments], expr(parent(score) < likes))
+    end
+
+    count :count_of_comments_on_public_posts, [:posts, :comments] do
+      join_filter([:posts], expr(public == true))
+    end
+
+    count(:num_of_authors_with_same_first_name, :authors_with_same_first_name)
   end
 end

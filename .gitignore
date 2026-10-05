@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2019 ash_postgres contributors <https://github.com/ash-project/ash_postgres/graphs/contributors>
+#
+# SPDX-License-Identifier: MIT
+
 # The directory Mix will write compiled artifacts to.
 /_build/
 
@@ -6,6 +10,8 @@
 
 # The directory Mix downloads your dependencies sources to.
 /deps/
+
+/tmp/
 
 # Where third-party dependencies like ExDoc output generated docs.
 /doc/
@@ -24,4 +30,7 @@ ash_postgres-*.tar
 
 test_migration_path
 test_snapshots_path
+test_tenant_migration_path
+
+/.claude/
 

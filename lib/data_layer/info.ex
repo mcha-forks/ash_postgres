@@ -1,11 +1,89 @@
+# SPDX-FileCopyrightText: 2019 ash_postgres contributors <https://github.com/ash-project/ash_postgres/graphs/contributors>
+#
+# SPDX-License-Identifier: MIT
+
 defmodule AshPostgres.DataLayer.Info do
   @moduledoc "Introspection functions for "
 
   alias Spark.Dsl.Extension
 
   @doc "The configured repo for a resource"
-  def repo(resource) do
-    Extension.get_opt(resource, [:postgres], :repo, nil, true)
+  def repo(resource, type \\ :mutate) do
+    case Extension.get_opt(resource, [:postgres], :repo, nil, true) do
+      fun when is_function(fun, 2) ->
+        fun.(resource, type)
+
+      repo ->
+        repo
+    end
+  end
+
+  @doc "A keyword list of calculations to their sql representation"
+  def calculations_to_sql(resource) do
+    Extension.get_opt(resource, [:postgres], :calculations_to_sql, [])
+  end
+
+  def calculation_to_sql(resource, calc) do
+    calculations_to_sql(resource)[calc]
+  end
+
+  @doc """
+  A keyword list of identity names to the literal SQL string representation of
+  the `where` clause portion of identity's partial unique index.
+
+  For example, given the following identity for a resource:
+
+      identities do
+        identity :active, [:status] do
+          where expr(status == "active")
+        end
+      end
+
+  An appropriate `identity_wheres_to_sql` would need to be made to generate the
+  correct migration for the partial index used by the identity:
+
+      postgres do
+        ...
+
+        identity_wheres_to_sql active: "status = 'active'"
+      end
+  """
+  @spec identity_wheres_to_sql(Ash.Resource.t()) :: keyword(String.t())
+  def identity_wheres_to_sql(resource) do
+    Extension.get_opt(resource, [:postgres], :identity_wheres_to_sql, [])
+  end
+
+  @doc """
+  Returns the literal SQL for the `where` clause given a resource and an
+  identity name.
+
+  See `identity_wheres_to_sql/1` for more details.
+  """
+  @spec identity_where_to_sql(Ash.Resource.t(), atom()) :: String.t() | nil
+  def identity_where_to_sql(resource, identity) do
+    identity_wheres_to_sql(resource)[identity]
+  end
+
+  @doc "Checks a version requirement against the resource's repo's postgres version"
+  def pg_version_matches?(resource, requirement) do
+    resource
+    |> min_pg_version()
+    |> Version.match?(requirement)
+  end
+
+  @doc "Gets the resource's repo's postgres version"
+  def min_pg_version(resource) do
+    case repo(resource, :read).min_pg_version() do
+      %Version{} = version ->
+        version
+
+      string when is_binary(string) ->
+        IO.warn(
+          "Got a `string` for min_pg_version, expected a `Version` struct. Got: #{inspect(string)}. Please call `Version.parse!` before returning the value."
+        )
+
+        Version.parse!(string)
+    end
   end
 
   @doc "The configured table for a resource"
@@ -37,6 +115,11 @@ defmodule AshPostgres.DataLayer.Info do
   @doc "A keyword list of customized migration types"
   def migration_types(resource) do
     Extension.get_opt(resource, [:postgres], :migration_types, [])
+  end
+
+  @doc "A keyword list of customized storage types"
+  def storage_types(resource) do
+    Extension.get_opt(resource, [:postgres], :storage_types, [])
   end
 
   @doc "A keyword list of customized migration defaults"
@@ -76,7 +159,7 @@ defmodule AshPostgres.DataLayer.Info do
 
   @doc "The configured polymorphic_reference_name for a resource"
   def polymorphic_name(resource) do
-    Extension.get_opt(resource, [:postgres, :references], :polymorphic_on_delete, nil, true)
+    Extension.get_opt(resource, [:postgres, :references], :polymorphic_name, nil, true)
   end
 
   @doc "The configured polymorphic? for a resource"
@@ -109,9 +192,14 @@ defmodule AshPostgres.DataLayer.Info do
     Extension.get_opt(resource, [:postgres], :foreign_key_names, [], true)
   end
 
-  @doc "Whether or not the resource should be included when generating migrations"
+  @doc "Whether or not the resource should be included when generating migrations. Always `false` for views."
   def migrate?(resource) do
-    Extension.get_opt(resource, [:postgres], :migrate?, nil, true)
+    not view?(resource) and Extension.get_opt(resource, [:postgres], :migrate?, nil, true)
+  end
+
+  @doc "Whether the resource's table is a view rather than a base table"
+  def view?(resource) do
+    Extension.get_opt(resource, [:postgres], :view?, false, true)
   end
 
   @doc "A list of keys to always include in upserts."
@@ -142,5 +230,10 @@ defmodule AshPostgres.DataLayer.Info do
   @doc "Whether or not to update a tenant for a given resource"
   def manage_tenant_update?(resource) do
     Extension.get_opt(resource, [:postgres, :manage_tenant], :update?, false)
+  end
+
+  @doc "String passed to table/2 in the create table migration for a given resource"
+  def create_table_options(resource) do
+    Extension.get_opt(resource, [:postgres], :create_table_options, nil)
   end
 end

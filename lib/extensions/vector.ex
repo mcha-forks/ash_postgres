@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2019 ash_postgres contributors <https://github.com/ash-project/ash_postgres/graphs/contributors>
+#
+# SPDX-License-Identifier: MIT
+
 defmodule AshPostgres.Extensions.Vector do
   @moduledoc """
   An extension that adds support for the `vector` type.
@@ -30,8 +34,20 @@ defmodule AshPostgres.Extensions.Vector do
         [<<IO.iodata_length(data)::int32()>> | data]
 
       vec ->
-        data = vec |> Ash.Vector.new() |> Ash.Vector.to_binary()
-        [<<IO.iodata_length(data)::int32()>> | data]
+        case Ash.Vector.new(vec) do
+          {:ok, vector} ->
+            data = Ash.Vector.to_binary(vector)
+            [<<IO.iodata_length(data)::int32()>> | data]
+
+          {:error, error} ->
+            raise """
+            Attempting to encode invalid vector, error: #{inspect(error)}
+
+            Vector:
+
+            #{inspect(vec)}
+            """
+        end
     end
   end
 

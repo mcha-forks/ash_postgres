@@ -1,29 +1,35 @@
+# SPDX-FileCopyrightText: 2019 ash_postgres contributors <https://github.com/ash-project/ash_postgres/graphs/contributors>
+#
+# SPDX-License-Identifier: MIT
+
 defmodule AshPostgres.SortTest do
   @moduledoc false
   use AshPostgres.RepoCase, async: false
-  alias AshPostgres.Test.{Api, Comment, Post, PostLink}
+  alias AshPostgres.Test.{Chat, Comment, Message, Post, PostLink, PostTag, PostView, Tag}
 
   require Ash.Query
+  require Ash.Sort
+  import Ash.Expr
 
   test "multi-column sorts work" do
     Post
-    |> Ash.Changeset.new(%{title: "aaa", score: 0})
-    |> Api.create!()
+    |> Ash.Changeset.for_create(:create, %{title: "aaa", score: 0})
+    |> Ash.create!()
 
     Post
-    |> Ash.Changeset.new(%{title: "aaa", score: 1})
-    |> Api.create!()
+    |> Ash.Changeset.for_create(:create, %{title: "aaa", score: 1})
+    |> Ash.create!()
 
     Post
-    |> Ash.Changeset.new(%{title: "bbb", score: 0})
-    |> Api.create!()
+    |> Ash.Changeset.for_create(:create, %{title: "bbb", score: 0})
+    |> Ash.create!()
 
     assert [
              %{title: "aaa", score: 0},
              %{title: "aaa", score: 1},
              %{title: "bbb"}
            ] =
-             Api.read!(
+             Ash.read!(
                Post
                |> Ash.Query.load(:count_of_comments)
                |> Ash.Query.sort(title: :asc, score: :asc)
@@ -33,31 +39,31 @@ defmodule AshPostgres.SortTest do
   test "multi-column sorts work on inclusion" do
     post =
       Post
-      |> Ash.Changeset.new(%{title: "aaa", score: 0})
-      |> Api.create!()
+      |> Ash.Changeset.for_create(:create, %{title: "aaa", score: 0})
+      |> Ash.create!()
 
     Post
-    |> Ash.Changeset.new(%{title: "aaa", score: 1})
-    |> Api.create!()
+    |> Ash.Changeset.for_create(:create, %{title: "aaa", score: 1})
+    |> Ash.create!()
 
     Post
-    |> Ash.Changeset.new(%{title: "bbb", score: 0})
-    |> Api.create!()
+    |> Ash.Changeset.for_create(:create, %{title: "bbb", score: 0})
+    |> Ash.create!()
 
     Comment
-    |> Ash.Changeset.new(%{title: "aaa", likes: 1})
+    |> Ash.Changeset.for_create(:create, %{title: "aaa", likes: 1})
     |> Ash.Changeset.manage_relationship(:post, post, type: :append_and_remove)
-    |> Api.create!()
+    |> Ash.create!()
 
     Comment
-    |> Ash.Changeset.new(%{title: "bbb", likes: 1})
+    |> Ash.Changeset.for_create(:create, %{title: "bbb", likes: 1})
     |> Ash.Changeset.manage_relationship(:post, post, type: :append_and_remove)
-    |> Api.create!()
+    |> Ash.create!()
 
     Comment
-    |> Ash.Changeset.new(%{title: "aaa", likes: 2})
+    |> Ash.Changeset.for_create(:create, %{title: "aaa", likes: 2})
     |> Ash.Changeset.manage_relationship(:post, post, type: :append_and_remove)
-    |> Api.create!()
+    |> Ash.create!()
 
     posts =
       Post
@@ -70,7 +76,7 @@ defmodule AshPostgres.SortTest do
           |> Ash.Query.limit(1)
       ])
       |> Ash.Query.sort([:title, :score])
-      |> Api.read!()
+      |> Ash.read!()
 
     assert [
              %{title: "aaa", comments: [%{title: "aaa"}]},
@@ -81,23 +87,23 @@ defmodule AshPostgres.SortTest do
 
   test "multicolumn sort works with a select statement" do
     Post
-    |> Ash.Changeset.new(%{title: "aaa", score: 0})
-    |> Api.create!()
+    |> Ash.Changeset.for_create(:create, %{title: "aaa", score: 0})
+    |> Ash.create!()
 
     Post
-    |> Ash.Changeset.new(%{title: "aaa", score: 1})
-    |> Api.create!()
+    |> Ash.Changeset.for_create(:create, %{title: "aaa", score: 1})
+    |> Ash.create!()
 
     Post
-    |> Ash.Changeset.new(%{title: "bbb", score: 0})
-    |> Api.create!()
+    |> Ash.Changeset.for_create(:create, %{title: "bbb", score: 0})
+    |> Ash.create!()
 
     assert [
              %{title: "aaa", score: 0},
              %{title: "aaa", score: 1},
              %{title: "bbb"}
            ] =
-             Api.read!(
+             Ash.read!(
                Post
                |> Ash.Query.sort(title: :asc, score: :asc)
                |> Ash.Query.select([:title, :score])
@@ -107,43 +113,43 @@ defmodule AshPostgres.SortTest do
   test "sorting when joining to a many to many relationship sorts properly" do
     post1 =
       Post
-      |> Ash.Changeset.new(%{title: "aaa", score: 0})
-      |> Api.create!()
+      |> Ash.Changeset.for_create(:create, %{title: "aaa", score: 0})
+      |> Ash.create!()
 
     post2 =
       Post
-      |> Ash.Changeset.new(%{title: "bbb", score: 1})
-      |> Api.create!()
+      |> Ash.Changeset.for_create(:create, %{title: "bbb", score: 1})
+      |> Ash.create!()
 
     post3 =
       Post
-      |> Ash.Changeset.new(%{title: "ccc", score: 0})
-      |> Api.create!()
+      |> Ash.Changeset.for_create(:create, %{title: "ccc", score: 0})
+      |> Ash.create!()
 
     PostLink
     |> Ash.Changeset.new()
     |> Ash.Changeset.manage_relationship(:source_post, post1, type: :append)
     |> Ash.Changeset.manage_relationship(:destination_post, post3, type: :append)
-    |> Api.create!()
+    |> Ash.create!()
 
     PostLink
     |> Ash.Changeset.new()
     |> Ash.Changeset.manage_relationship(:source_post, post2, type: :append)
     |> Ash.Changeset.manage_relationship(:destination_post, post2, type: :append)
-    |> Api.create!()
+    |> Ash.create!()
 
     PostLink
     |> Ash.Changeset.new()
     |> Ash.Changeset.manage_relationship(:source_post, post3, type: :append)
     |> Ash.Changeset.manage_relationship(:destination_post, post1, type: :append)
-    |> Api.create!()
+    |> Ash.create!()
 
     assert [
              %{title: "aaa"},
              %{title: "bbb"},
              %{title: "ccc"}
            ] =
-             Api.read!(
+             Ash.read!(
                Post
                |> Ash.Query.sort(title: :asc)
                |> Ash.Query.filter(linked_posts.title in ["aaa", "bbb", "ccc"])
@@ -154,7 +160,7 @@ defmodule AshPostgres.SortTest do
              %{title: "bbb"},
              %{title: "aaa"}
            ] =
-             Api.read!(
+             Ash.read!(
                Post
                |> Ash.Query.sort(title: :desc)
                |> Ash.Query.filter(linked_posts.title in ["aaa", "bbb", "ccc"] or title == "aaa")
@@ -165,7 +171,7 @@ defmodule AshPostgres.SortTest do
              %{title: "bbb"},
              %{title: "aaa"}
            ] =
-             Api.read!(
+             Ash.read!(
                Post
                |> Ash.Query.sort(title: :desc)
                |> Ash.Query.filter(
@@ -179,6 +185,303 @@ defmodule AshPostgres.SortTest do
     Post
     |> Ash.Query.load(:count_of_comments)
     |> Ash.Query.sort(:c_times_p)
-    |> Api.read!()
+    |> Ash.read!()
+  end
+
+  test "calculations can sort on expressions" do
+    post1 =
+      Post
+      |> Ash.Changeset.for_create(:create, %{title: "aaa", score: 0})
+      |> Ash.create!()
+
+    post2 =
+      Post
+      |> Ash.Changeset.for_create(:create, %{title: "bbb", score: 1})
+      |> Ash.create!()
+
+    post3 =
+      Post
+      |> Ash.Changeset.for_create(:create, %{title: "ccc", score: 0})
+      |> Ash.create!()
+
+    PostLink
+    |> Ash.Changeset.new()
+    |> Ash.Changeset.manage_relationship(:source_post, post1, type: :append)
+    |> Ash.Changeset.manage_relationship(:destination_post, post3, type: :append)
+    |> Ash.create!()
+
+    PostLink
+    |> Ash.Changeset.new()
+    |> Ash.Changeset.manage_relationship(:source_post, post2, type: :append)
+    |> Ash.Changeset.manage_relationship(:destination_post, post2, type: :append)
+    |> Ash.create!()
+
+    PostLink
+    |> Ash.Changeset.new()
+    |> Ash.Changeset.manage_relationship(:source_post, post3, type: :append)
+    |> Ash.Changeset.manage_relationship(:destination_post, post1, type: :append)
+    |> Ash.create!()
+
+    posts_query =
+      Ash.Query.sort(Post, Ash.Sort.expr_sort(parent(post_links.state)))
+
+    Post
+    |> Ash.Query.load(linked_posts: posts_query)
+    |> Ash.read!()
+  end
+
+  test "sorting on relationship attributes work" do
+    post1 =
+      Post
+      |> Ash.Changeset.for_create(:create, %{title: "aaa", score: 0})
+      |> Ash.create!()
+
+    PostView
+    |> Ash.Changeset.for_action(:create, %{browser: :firefox, post_id: post1.id})
+    |> Ash.create!()
+
+    post2 =
+      Post
+      |> Ash.Changeset.for_create(:create, %{title: "bbb", score: 0})
+      |> Ash.create!()
+
+    PostView
+    |> Ash.Changeset.for_action(:create, %{browser: :chrome, post_id: post2.id})
+    |> Ash.create!()
+
+    assert [
+             %{title: "aaa", views: [%{browser: :firefox}]},
+             %{title: "bbb", views: [%{browser: :chrome}]}
+           ] =
+             Ash.read!(
+               Post
+               |> Ash.Query.load(:views)
+               |> Ash.Query.sort(title: :asc)
+             )
+
+    assert [
+             %{title: "bbb", views: [%{browser: :chrome}]},
+             %{title: "aaa", views: [%{browser: :firefox}]}
+           ] =
+             Ash.read!(
+               Post
+               |> Ash.Query.load(:views)
+               # this doesn't really make sense to do, you'd want to do something like
+               # `max(views, field: :time)` or something. but it illustrates a bug fix,
+               # and nothing currently prevents you from doing it, so we keep the test for now.
+               |> Ash.Query.sort({Ash.Sort.expr_sort(views.time, :datetime), :desc}, title: :asc)
+             )
+  end
+
+  test "sorting with filtered relationship" do
+    tag = Ash.Changeset.for_create(Tag, :create) |> Ash.create!()
+    dates = [~D[2025-01-03], ~D[2025-01-05], ~D[2025-01-01], ~D[2025-01-10], ~D[2025-01-02]]
+
+    dates
+    |> Enum.each(fn date ->
+      {:ok, datetime} = DateTime.new(date, ~T[00:00:00])
+
+      post =
+        Ash.Changeset.for_create(Post, :create, %{created_at: datetime})
+        |> Ash.create!()
+
+      Ash.Changeset.for_create(PostTag, :create, post_id: post.id, tag_id: tag.id)
+      |> Ash.create!()
+    end)
+
+    latest_post = Ash.load!(tag, :latest_post).latest_post
+    expected_date = hd(Enum.sort(dates, :desc))
+
+    assert DateTime.to_date(latest_post.created_at) == expected_date
+  end
+
+  describe "keyset pagination with aggregates and relationship sort" do
+    test "keyset pagination with loaded aggregate and relationship sort works" do
+      author1 =
+        AshPostgres.Test.Author
+        |> Ash.Changeset.for_create(:create, %{first_name: "Zara"})
+        |> Ash.create!()
+
+      author2 =
+        AshPostgres.Test.Author
+        |> Ash.Changeset.for_create(:create, %{first_name: "Alice"})
+        |> Ash.create!()
+
+      post1 =
+        Post
+        |> Ash.Changeset.for_create(:create, %{title: "Post by Zara", score: 1})
+        |> Ash.Changeset.manage_relationship(:author, author1, type: :append_and_remove)
+        |> Ash.create!()
+
+      post2 =
+        Post
+        |> Ash.Changeset.for_create(:create, %{title: "Post by Alice", score: 2})
+        |> Ash.Changeset.manage_relationship(:author, author2, type: :append_and_remove)
+        |> Ash.create!()
+
+      # Add comments to create aggregate data
+      Comment
+      |> Ash.Changeset.for_create(:create, %{title: "Comment 1"})
+      |> Ash.Changeset.manage_relationship(:post, post1, type: :append_and_remove)
+      |> Ash.create!()
+
+      Comment
+      |> Ash.Changeset.for_create(:create, %{title: "Comment 2"})
+      |> Ash.Changeset.manage_relationship(:post, post1, type: :append_and_remove)
+      |> Ash.create!()
+
+      Comment
+      |> Ash.Changeset.for_create(:create, %{title: "Comment 3"})
+      |> Ash.Changeset.manage_relationship(:post, post2, type: :append_and_remove)
+      |> Ash.create!()
+
+      # This combination causes Ecto.SubQueryError:
+      # - Keyset pagination (creates subquery)
+      # - Loaded aggregate (count_of_comments)
+      # - Relationship sort (author.first_name becomes __calc__0)
+      result =
+        Post
+        |> Ash.Query.for_read(:keyset)
+        |> Ash.Query.load(:count_of_comments)
+        |> Ash.Query.sort([{Ash.Sort.expr_sort(author.first_name), :asc}])
+        |> Ash.Query.page(limit: 10)
+        |> Ash.read!()
+
+      # Should be sorted by author first name: Alice, then Zara
+      assert %Ash.Page.Keyset{results: [first, second]} = result
+      assert first.title == "Post by Alice"
+      assert first.count_of_comments == 1
+      assert second.title == "Post by Zara"
+      assert second.count_of_comments == 2
+    end
+  end
+
+  describe "sorting by multiple has_one relationships" do
+    test "sorting by single calculated field through has_one relationship works" do
+      chat = Ash.create!(Chat, %{name: "Test Chat"})
+
+      # Create some messages
+      Ash.create!(Message, %{
+        chat_id: chat.id,
+        content: "First",
+        sent_at: ~U[2025-01-01 10:00:00Z]
+      })
+
+      Ash.create!(Message, %{
+        chat_id: chat.id,
+        content: "Second",
+        sent_at: ~U[2025-01-02 10:00:00Z],
+        read_at: ~U[2025-01-02 11:00:00Z]
+      })
+
+      Ash.create!(Message, %{
+        chat_id: chat.id,
+        content: "Third",
+        sent_at: ~U[2025-01-03 10:00:00Z]
+      })
+
+      # This should work - sorting by single has_one relationship calculation
+      result =
+        Chat
+        |> Ash.Query.sort([{Ash.Sort.expr_sort(expr(last_unread_message.sent_at)), :desc}])
+        |> Ash.read!()
+
+      assert [%Chat{}] = result
+    end
+
+    test "sorting by different single calculated field through has_one relationship works" do
+      chat = Ash.create!(Chat, %{name: "Test Chat"})
+
+      # Create some messages
+      Ash.create!(Message, %{
+        chat_id: chat.id,
+        content: "First",
+        sent_at: ~U[2025-01-01 10:00:00Z]
+      })
+
+      Ash.create!(Message, %{
+        chat_id: chat.id,
+        content: "Second",
+        sent_at: ~U[2025-01-02 10:00:00Z],
+        read_at: ~U[2025-01-02 11:00:00Z]
+      })
+
+      # This should work - sorting by different single has_one relationship calculation
+      result =
+        Chat
+        |> Ash.Query.sort([{Ash.Sort.expr_sort(expr(last_message.read_at)), :desc}])
+        |> Ash.read!()
+
+      assert [%Chat{}] = result
+    end
+
+    test "sorting by multiple calculated fields through different has_one relationships fails" do
+      chat = Ash.create!(Chat, %{name: "Test Chat"})
+
+      # Create some messages
+      Ash.create!(Message, %{
+        chat_id: chat.id,
+        content: "First",
+        sent_at: ~U[2025-01-01 10:00:00Z]
+      })
+
+      Ash.create!(Message, %{
+        chat_id: chat.id,
+        content: "Second",
+        sent_at: ~U[2025-01-02 10:00:00Z],
+        read_at: ~U[2025-01-02 11:00:00Z]
+      })
+
+      Ash.create!(Message, %{
+        chat_id: chat.id,
+        content: "Third",
+        sent_at: ~U[2025-01-03 10:00:00Z]
+      })
+
+      Chat
+      |> Ash.Query.sort([
+        {Ash.Sort.expr_sort(expr(last_unread_message.sent_at)), :desc},
+        {Ash.Sort.expr_sort(expr(last_message.read_at)), :desc}
+      ])
+      |> Ash.read!()
+    end
+  end
+
+  describe "keyset pagination on microsecond-precision datetime columns" do
+    test "next page returns the remaining rows when sorting by created_at desc" do
+      # All three posts share the same second; only microseconds differ —
+      # exposes precision loss between the eq and lt sides of the keyset filter.
+      base = ~U[2026-05-25 05:34:24Z]
+
+      [post1, post2, post3] =
+        Enum.map([10_000, 20_000, 30_000], fn usec ->
+          Post
+          |> Ash.Changeset.for_create(:create, %{
+            title: "post-#{usec}",
+            created_at: %{base | microsecond: {usec, 6}}
+          })
+          |> Ash.create!()
+        end)
+
+      %{results: [first, cursor_row]} =
+        Post
+        |> Ash.Query.for_read(:keyset)
+        |> Ash.Query.sort(created_at: :desc)
+        |> Ash.Query.page(limit: 2)
+        |> Ash.read!()
+
+      assert first.id == post3.id
+      assert cursor_row.id == post2.id
+
+      %{results: results} =
+        Post
+        |> Ash.Query.for_read(:keyset)
+        |> Ash.Query.sort(created_at: :desc)
+        |> Ash.Query.page(limit: 2, after: cursor_row.__metadata__.keyset)
+        |> Ash.read!()
+
+      assert length(results) == 1
+      assert hd(results).id == post1.id
+    end
   end
 end

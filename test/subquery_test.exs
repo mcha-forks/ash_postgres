@@ -1,0 +1,22 @@
+# SPDX-FileCopyrightText: 2019 ash_postgres contributors <https://github.com/ash-project/ash_postgres/graphs/contributors>
+#
+# SPDX-License-Identifier: MIT
+
+defmodule AshPostgres.SubqueryTest do
+  use AshPostgres.RepoCase, async: false
+
+  alias AshPostgres.Test.Subquery.{Access, Child, Parent, Through}
+
+  test "joins are correctly wrapped in subqueries" do
+    {:ok, child} = Child.create(%{})
+
+    {:ok, parent} =
+      Parent.create(%{visible: true})
+
+    Access.create(%{parent_id: parent.id, email: "foo@bar.com"})
+
+    Through.create(%{parent_id: parent.id, child_id: child.id})
+
+    Child.read!(actor: %{email: "foo@bar.com"})
+  end
+end

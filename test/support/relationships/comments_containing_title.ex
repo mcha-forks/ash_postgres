@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2019 ash_postgres contributors <https://github.com/ash-project/ash_postgres/graphs/contributors>
+#
+# SPDX-License-Identifier: MIT
+
 defmodule AshPostgres.Test.Post.CommentsContainingTitle do
   @moduledoc false
 
@@ -13,7 +17,7 @@ defmodule AshPostgres.Test.Post.CommentsContainingTitle do
      query
      |> Ash.Query.filter(post_id in ^post_ids)
      |> Ash.Query.filter(contains(title, post.title))
-     |> AshPostgres.Test.Api.read!(actor: actor, authorize?: authorize?)
+     |> Ash.read!(actor: actor, authorize?: authorize?)
      |> Enum.group_by(& &1.post_id)}
   end
 

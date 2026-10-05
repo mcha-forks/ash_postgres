@@ -1,15 +1,135 @@
+# SPDX-FileCopyrightText: 2019 ash_postgres contributors <https://github.com/ash-project/ash_postgres/graphs/contributors>
+#
+# SPDX-License-Identifier: MIT
+
+defmodule PassIfOriginalDataPresent do
+  @moduledoc false
+  use Ash.Policy.SimpleCheck
+
+  def describe(_options), do: "original data present"
+
+  def match?(_, _, _) do
+    true
+  end
+
+  def requires_original_data?(_, _) do
+    true
+  end
+end
+
+defmodule HasNoComments do
+  @moduledoc false
+  use Ash.Resource.Validation
+
+  def atomic(changeset, _opts, context) do
+    # Test multiple types of aggregates in a single validation
+    condition =
+      case changeset.context.aggregate do
+        :exists ->
+          expr(exists(comments, true))
+
+        :list ->
+          # credo:disable-for-next-line Credo.Check.Warning.ExpensiveEmptyEnumCheck
+          expr(length(list(comments, field: :id)) > 0)
+
+        :count ->
+          expr(count(comments) > 0)
+
+        :combined ->
+          # credo:disable-for-lines:4 Credo.Check.Warning.ExpensiveEmptyEnumCheck
+          expr(
+            exists(comments, true) and
+              length(list(comments, field: :id)) > 0 and
+              count(comments) > 0
+          )
+      end
+
+    [
+      {:atomic, [], condition,
+       expr(
+         error(^Ash.Error.Changes.InvalidChanges, %{
+           message: ^context.message || "Post has comments"
+         })
+       )}
+    ]
+  end
+end
+
+defmodule CiCategory do
+  @moduledoc false
+  use Ash.Type.NewType,
+    subtype_of: :ci_string
+end
+
 defmodule AshPostgres.Test.Post do
   @moduledoc false
   use Ash.Resource,
+    domain: AshPostgres.Test.Domain,
     data_layer: AshPostgres.DataLayer,
     authorizers: [
       Ash.Policy.Authorizer
     ]
 
+  require Ash.Sort
+
+  defmodule TitleTwice do
+    @moduledoc false
+    use Ash.Resource.Calculation
+
+    def load(_, _, _), do: [:title]
+
+    # it would always be a bug for these
+    # to produce different values
+    # but we do it here for testing
+    def calculate(records, _, _) do
+      Enum.map(records, fn record ->
+        "in calc:" <> record.title <> record.title
+      end)
+    end
+
+    def expression(_, _) do
+      expr("in expr:" <> title <> title)
+    end
+  end
+
   policies do
     bypass action_type(:read) do
       # Check that the post is in the same org as actor
       authorize_if(relates_to_actor_via([:organization, :users]))
+    end
+
+    policy action(:read_with_policy_with_parent) do
+      authorize_if(
+        relates_to_actor_via([:posts_with_my_organization_name_as_a_title, :organization, :users])
+      )
+    end
+
+    policy action(:allow_any) do
+      authorize_if(always())
+    end
+
+    policy action(:requires_initial_data) do
+      authorize_if(PassIfOriginalDataPresent)
+    end
+
+    bypass action(:update_if_author) do
+      authorize_if(relates_to_actor_via(:author))
+    end
+
+    policy action_type(:update) do
+      authorize_if(action(:requires_initial_data))
+      authorize_if(relates_to_actor_via([:author, :authors_with_same_first_name]))
+      authorize_unless(changing_attributes(title: [from: "good", to: "bad"]))
+    end
+
+    policy action(:create) do
+      authorize_unless(changing_attributes(title: [to: "worst"]))
+    end
+  end
+
+  field_policies do
+    field_policy :* do
+      authorize_if(always())
     end
   end
 
@@ -17,6 +137,9 @@ defmodule AshPostgres.Test.Post do
     table("posts")
     repo(AshPostgres.TestRepo)
     base_filter_sql("type = 'sponsored'")
+
+    calculations_to_sql(upper_thing: "UPPER(uniq_on_upper)")
+    identity_wheres_to_sql(uniq_if_contains_foo: "(uniq_if_contains_foo LIKE '%foo%')")
 
     check_constraints do
       check_constraint(:price, "price_must_be_positive",
@@ -39,11 +162,237 @@ defmodule AshPostgres.Test.Post do
   end
 
   actions do
-    defaults([:update, :destroy])
+    default_accept(:*)
 
-    read :read do
-      primary?(true)
+    defaults([:read, :destroy])
+
+    read :sorted_by_title do
+      prepare(build(sort: [title: :asc]))
     end
+
+    read :with_version_check do
+      argument(:version, :integer)
+
+      filter(expr(type(^arg(:version), :string) in ["1", "2"]))
+    end
+
+    read :first_and_last_post do
+      prepare(fn query, _ ->
+        Ash.Query.combination_of(query, [
+          Ash.Query.Combination.base(
+            limit: 1,
+            sort: [created_at: :desc]
+          ),
+          Ash.Query.Combination.union(
+            limit: 1,
+            sort: [created_at: :asc]
+          )
+        ])
+      end)
+    end
+
+    read :first_and_last_two_posts do
+      prepare(fn query, _ ->
+        Ash.Query.combination_of(query, [
+          Ash.Query.Combination.base(
+            limit: 2,
+            sort: [created_at: :desc]
+          ),
+          Ash.Query.Combination.union(
+            limit: 2,
+            sort: [created_at: :asc]
+          )
+        ])
+      end)
+    end
+
+    update :subtract_integer_from_decimal do
+      argument(:amount, :integer, allow_nil?: false)
+      change(atomic_update(:decimal, expr(decimal + -(^arg(:amount)))))
+    end
+
+    update :subtract_from_decimal do
+      argument(:amount, :decimal, allow_nil?: false)
+      change(atomic_update(:decimal, expr(decimal + -(^arg(:amount)))))
+    end
+
+    update :add_to_limited_score do
+      argument(:amount, :integer, allow_nil?: false)
+      change(atomic_update(:limited_score, expr((limited_score || 0) + ^arg(:amount))))
+    end
+
+    update :validate_absent_non_atomically do
+      require_atomic?(false)
+      accept([:title])
+      validate(absent(:title))
+    end
+
+    update :validate_absent do
+      accept([:title])
+      validate(absent(:title))
+    end
+
+    update :change_nothing do
+      accept([])
+      require_atomic?(false)
+      change(fn changeset, _ -> changeset end)
+    end
+
+    update :change_nothing_atomic do
+      accept([])
+      require_atomic?(true)
+    end
+
+    update :change_title do
+      accept([:title])
+      require_atomic?(false)
+      change(fn changeset, _ -> changeset end)
+    end
+
+    update :change_title_atomic do
+      accept([:title])
+      require_atomic?(true)
+    end
+
+    destroy :destroy_only_freds do
+      change(filter(expr(title == "fred")))
+    end
+
+    destroy :destroy_if_no_comments do
+      validate HasNoComments do
+        message "Can only delete if Post has no comments"
+      end
+    end
+
+    update :update_if_no_comments do
+      validate HasNoComments do
+        message "Can only update if Post has no comments"
+      end
+    end
+
+    destroy :destroy_if_no_comments_non_atomic do
+      require_atomic?(false)
+
+      validate HasNoComments do
+        message "Can only delete if Post has no comments"
+      end
+    end
+
+    update :update_if_no_comments_non_atomic do
+      require_atomic?(false)
+
+      validate HasNoComments do
+        message "Can only update if Post has no comments"
+      end
+    end
+
+    update :update_only_freds do
+      change(filter(expr(title == "fred")))
+    end
+
+    update :set_title_to_sum_of_author_count_of_posts do
+      change(atomic_update(:title, expr("#{sum_of_author_count_of_posts}")))
+    end
+
+    update :set_title_to_author_profile_description do
+      change(atomic_update(:title, expr(author.profile_description)))
+    end
+
+    destroy :destroy_with_confirm do
+      require_atomic?(false)
+      argument(:confirm, :string, allow_nil?: false)
+
+      change(fn changeset, _ ->
+        Ash.Changeset.before_action(changeset, fn changeset ->
+          if changeset.arguments.confirm == "CONFIRM" do
+            changeset
+          else
+            Ash.Changeset.add_error(changeset, field: :confirm, message: "must type CONFIRM")
+          end
+        end)
+      end)
+    end
+
+    destroy :soft_destroy_with_confirm do
+      require_atomic?(false)
+      argument(:confirm, :string, allow_nil?: false)
+
+      change(fn changeset, _ ->
+        Ash.Changeset.before_action(changeset, fn changeset ->
+          if changeset.arguments.confirm == "CONFIRM" do
+            changeset
+          else
+            Ash.Changeset.add_error(changeset, field: :confirm, message: "must type CONFIRM")
+          end
+        end)
+      end)
+    end
+
+    update :set_attributes_from_parent do
+      require_atomic?(false)
+
+      change(
+        atomic_update(
+          :title,
+          expr(
+            if is_nil(parent_post_id) do
+              author.title
+            else
+              parent_post.author.first_name
+            end
+          )
+        )
+      )
+    end
+
+    update :update_metadata do
+      accept([:metadata])
+    end
+
+    destroy :cascade_destroy do
+      change(cascade_destroy(:high_ratings, after_action?: false))
+    end
+
+    update :update do
+      primary?(true)
+      require_atomic?(false)
+    end
+
+    update :atomic_update do
+    end
+
+    update :update_if_author do
+      require_atomic?(false)
+    end
+
+    update(:dont_validate)
+
+    update :change_title_to_foo_unless_its_already_foo do
+      validate(attribute_does_not_equal(:title, "foo"))
+      change(set_attribute(:title, "foo"))
+    end
+
+    read :title_is_foo do
+      filter(expr(title == "foo"))
+    end
+
+    read :read_with_policy_with_parent do
+    end
+
+    read :category_matches do
+      argument(:category, CiCategory)
+      filter(expr(category == ^arg(:category)))
+    end
+
+    read :keyset do
+      pagination do
+        keyset?(true)
+        countable(true)
+        required?(false)
+      end
+    end
+
+    read(:allow_any)
 
     read :paginated do
       pagination(offset?: true, required?: true, countable: true)
@@ -62,101 +411,729 @@ defmodule AshPostgres.Test.Post do
       )
     end
 
+    create :create_with_atomic_set do
+      change(atomic_set(:score, expr(100)))
+    end
+
+    defmodule HasBeforeAction do
+      @moduledoc false
+      use Ash.Resource.Change
+
+      def change(changeset, _, _) do
+        Ash.Changeset.before_action(changeset, fn changeset ->
+          Ash.Changeset.force_change_attribute(changeset, :title, "before_action")
+        end)
+      end
+    end
+
+    create :create_with_before_action do
+      change(HasBeforeAction)
+    end
+
+    create :upsert_with_filter do
+      upsert?(true)
+      upsert_identity(:uniq_if_contains_foo)
+      upsert_fields([:price])
+
+      change(fn changeset, _ ->
+        Ash.Changeset.filter(changeset, expr(price != fragment("EXCLUDED.price")))
+      end)
+    end
+
+    create :upsert_with_no_filter do
+      upsert?(true)
+      upsert_identity(:uniq_if_contains_foo)
+      upsert_fields([:price])
+    end
+
+    create :create_with_nested_bulk_create do
+      change(
+        after_action(fn changeset, result, context ->
+          Ash.bulk_create!(
+            [%{title: "nested_post_1"}, %{title: "nested_post_2"}],
+            __MODULE__,
+            :create,
+            authorize?: false,
+            tenant: changeset.tenant,
+            return_records?: true
+          )
+
+          {:ok, result}
+        end)
+      )
+    end
+
+    create :create_with_nested_bulk_update do
+      change(
+        after_action(fn changeset, result, context ->
+          created_posts =
+            Ash.bulk_create!(
+              [%{title: "post_to_update_1"}, %{title: "post_to_update_2"}],
+              __MODULE__,
+              :create,
+              authorize?: false,
+              tenant: changeset.tenant,
+              return_records?: true
+            )
+
+          post_ids = Enum.map(created_posts.records, & &1.id)
+
+          Ash.bulk_update!(
+            __MODULE__,
+            :set_title,
+            %{title: "updated_via_nested_bulk"},
+            filter: [id: [in: post_ids]],
+            authorize?: false,
+            tenant: changeset.tenant
+          )
+
+          {:ok, result}
+        end)
+      )
+    end
+
+    update :set_labels do
+      require_atomic?(false)
+      argument(:labels, {:array, :map})
+
+      change(manage_relationship(:labels, type: :append_and_remove))
+    end
+
+    update :set_title do
+      accept([:title])
+    end
+
+    update :set_title_from_author do
+      change(atomic_update(:title, expr(author.first_name)))
+    end
+
     update :increment_score do
       argument(:amount, :integer, default: 1)
       change(atomic_update(:score, expr((score || 0) + ^arg(:amount))))
+    end
+
+    update :review do
+      change(
+        after_action(fn changeset, record, _context ->
+          new_model = {1.0, 2.0, 3.0}
+
+          record
+          |> Ash.Changeset.for_update(:atomic_update)
+          |> Ash.Changeset.force_change_attribute(:model, new_model)
+          |> Ash.update()
+        end)
+      )
+
+      require_atomic?(false)
+    end
+
+    update :requires_initial_data do
+      argument(:amount, :integer, default: 1)
+      change(atomic_update(:score, expr((score || 0) + ^arg(:amount))))
+    end
+
+    # Atomic-compatible action that also registers an after_action hook, used to verify
+    # `Ash.update_many` runs after_action hooks on its single-statement (MERGE) path.
+    update :update_and_mark do
+      accept([:title])
+      require_atomic?(true)
+      change(AshPostgres.Test.Changes.AtomicAfterActionMarker)
+    end
+
+    # Unconditional after_batch hook on an atomic action: runs on the MERGE path (no calculation).
+    update :update_with_after_batch do
+      accept([:title])
+      require_atomic?(true)
+      change(AshPostgres.Test.Changes.AfterBatchMarker)
+    end
+
+    # Conditional after_batch hook: its `where` becomes a calculation the data layer must evaluate
+    # over the merged rows — exercises the calculation (CTE) path of the MERGE.
+    update :update_with_conditional_after_batch do
+      accept([:title])
+      require_atomic?(true)
+      change(AshPostgres.Test.Changes.AfterBatchMarker, where: [compare(:score, greater_than: 5)])
+    end
+
+    update :manual_update do
+      require_atomic?(false)
+      manual(AshPostgres.Test.Post.ManualUpdate)
+    end
+
+    update :update_constrained_int do
+      argument(:amount, :integer, allow_nil?: false)
+      change(atomic_update(:constrained_int, expr((constrained_int || 0) + ^arg(:amount))))
+
+      validate(compare(:constrained_int, greater_than_or_equal_to: 2),
+        message: "You cannot select less than two."
+      )
+    end
+
+    update :optimistic_lock do
+      accept([:title])
+      change(optimistic_lock(:version))
+    end
+
+    destroy :optimistic_lock_destroy do
+      change(optimistic_lock(:version))
+    end
+
+    read :read_with_related_list_agg_filter do
+      pagination(keyset?: true, default_limit: 25)
+      filter(expr(count_nils(latest_comment.linked_comment_post_ids) == 0))
+    end
+
+    read :read_by_comment_author do
+      argument(:author_id, :uuid, allow_nil?: false)
+
+      filter(expr(comments.author_id == ^arg(:author_id)))
+
+      prepare(
+        build(
+          load: [
+            datetime_of_first_comment_by_author: %{author_id: arg(:author_id)}
+          ]
+        )
+      )
     end
   end
 
   identities do
     identity(:uniq_one_and_two, [:uniq_one, :uniq_two])
+    identity(:uniq_on_upper, [:upper_thing])
+
+    identity(:uniq_if_contains_foo, [:uniq_if_contains_foo]) do
+      where expr(contains(uniq_if_contains_foo, "foo"))
+    end
   end
 
   attributes do
     uuid_primary_key(:id, writable?: true)
-    attribute(:title, :string)
-    attribute(:score, :integer)
-    attribute(:public, :boolean)
-    attribute(:category, :ci_string)
-    attribute(:type, :atom, default: :sponsored, private?: true, writable?: false)
-    attribute(:price, :integer)
-    attribute(:decimal, :decimal, default: Decimal.new(0))
-    attribute(:status, AshPostgres.Test.Types.Status)
-    attribute(:status_enum, AshPostgres.Test.Types.StatusEnum)
-    attribute(:status_enum_no_cast, AshPostgres.Test.Types.StatusEnumNoCast, source: :status_enum)
-    attribute(:point, AshPostgres.Test.Point)
-    attribute(:stuff, :map)
-    attribute(:uniq_one, :string)
-    attribute(:uniq_two, :string)
-    attribute(:uniq_custom_one, :string)
-    attribute(:uniq_custom_two, :string)
-    create_timestamp(:created_at)
-    update_timestamp(:updated_at)
+
+    attribute(:version, :integer, allow_nil?: false, default: 1)
+
+    attribute(:title, :string) do
+      public?(true)
+      source(:title_column)
+    end
+
+    attribute :not_selected_by_default, :string do
+      select_by_default?(false)
+    end
+
+    attribute(:datetime, AshPostgres.TimestamptzUsec, public?: true)
+    attribute(:score, :integer, public?: true)
+    attribute(:limited_score, :integer, public?: true, constraints: [min: 0, max: 100])
+
+    attribute(:public, :boolean, public?: true)
+    attribute(:is_special, :boolean, public?: true, allow_nil?: false, default: true)
+    attribute(:category, CiCategory, public?: true)
+    attribute(:type, :atom, default: :sponsored, writable?: false, public?: false)
+    attribute(:price, :integer, public?: true)
+    attribute(:decimal, :decimal, default: Decimal.new(0), public?: true)
+    attribute(:status, AshPostgres.Test.Types.Status, public?: true)
+    attribute(:status_enum, AshPostgres.Test.Types.StatusEnum, public?: true)
+    attribute(:metadata, :map)
+
+    attribute(:status_enum_no_cast, AshPostgres.Test.Types.StatusEnumNoCast,
+      source: :status_enum,
+      public?: true
+    )
+
+    attribute(:constrained_int, :integer,
+      constraints: [min: 1, max: 10],
+      default: 2,
+      allow_nil?: false,
+      public?: true
+    )
+
+    attribute(:point, AshPostgres.Test.Point, public?: true)
+    attribute(:composite_point, AshPostgres.Test.CompositePoint, public?: true)
+    attribute(:string_point, AshPostgres.Test.StringPoint, public?: true)
+    attribute(:person_detail, AshPostgres.Test.PersonDetail, public?: true)
+    attribute(:stuff, :map, public?: true)
+
+    attribute :keyword_map, :keyword do
+      public?(true)
+      allow_nil?(true)
+
+      constraints(
+        fields: [
+          display_template: [
+            type: :string
+          ],
+          size: [
+            type: :integer
+          ]
+        ]
+      )
+    end
+
+    attribute(:list_of_stuff, {:array, :map}, public?: true)
+    attribute(:uniq_one, :string, public?: true)
+    attribute(:uniq_two, :string, public?: true)
+    attribute(:uniq_custom_one, :string, public?: true)
+    attribute(:uniq_custom_two, :string, public?: true)
+    attribute(:uniq_on_upper, :string, public?: true)
+    attribute(:uniq_if_contains_foo, :string, public?: true)
+    attribute(:base_reading_time, :integer, public?: true)
+
+    attribute :model, :tuple do
+      constraints(
+        fields: [
+          alpha: [type: :float, description: "The alpha field"],
+          beta: [type: :float, description: "The beta field"],
+          t: [type: :float, description: "The t field"]
+        ]
+      )
+
+      default(fn -> {3.0, 3.0, 1.0} end)
+    end
+
+    attribute :list_containing_nils, {:array, :string} do
+      public?(true)
+      constraints(nil_items?: true)
+    end
+
+    attribute(:ltree_unescaped, AshPostgres.Ltree,
+      constraints: [min_length: 1, max_length: 10],
+      public?: true
+    )
+
+    attribute(:ltree_escaped, AshPostgres.Ltree, constraints: [escape?: true], public?: true)
+
+    create_timestamp(:created_at, writable?: true, public?: true)
+
+    update_timestamp(:updated_at,
+      type: AshPostgres.TimestamptzUsec,
+      writable?: true,
+      public?: true
+    )
   end
 
   code_interface do
-    define_for(AshPostgres.Test.Api)
+    define(:create, args: [:title])
     define(:get_by_id, action: :read, get_by: [:id])
     define(:increment_score, args: [{:optional, :amount}])
+    define(:destroy)
+    define(:update_if_author)
+    define(:update_constrained_int, args: [:amount])
+
+    define_calculation(:upper_title, args: [:title])
   end
 
   relationships do
     belongs_to :organization, AshPostgres.Test.Organization do
+      public?(true)
       attribute_writable?(true)
     end
 
-    belongs_to(:author, AshPostgres.Test.Author)
+    belongs_to(:current_user_author, AshPostgres.Test.Author) do
+      source_attribute(:author_id)
+      define_attribute?(false)
+      filter(expr(^actor(:id) == id))
+    end
+
+    has_many(:posts_with_my_organization_name_as_a_title, __MODULE__) do
+      public?(true)
+      no_attributes?(true)
+      filter(expr(fragment("? = ?", title, parent(organization.name))))
+    end
+
+    has_many(
+      :organizations_with_posts_that_have_the_post_title_somewhere_in_their_comments,
+      AshPostgres.Test.Organization
+    ) do
+      no_attributes?(true)
+      filter(expr(fragment("POSITION(? IN ?) > 0", posts.title, parent(concated_comment_titles))))
+    end
+
+    has_many(:recommendations, __MODULE__) do
+      public?(true)
+      no_attributes?(true)
+      sort([calc(parent(datetime) > now())])
+    end
+
+    belongs_to :parent_post, __MODULE__ do
+      public?(true)
+    end
+
+    belongs_to(:author, AshPostgres.Test.Author) do
+      public?(true)
+    end
+
+    has_one :author_from_exists, AshPostgres.Test.Author do
+      public?(true)
+      no_attributes?(true)
+      filter(expr(exists(posts, id == parent(parent(id)))))
+    end
+
+    has_many :co_author_posts, AshPostgres.Test.CoAuthorPost do
+      public?(true)
+
+      destination_attribute(:post_id)
+      filter(expr(not is_nil(post.id)))
+    end
+
+    many_to_many :co_authors, AshPostgres.Test.Author do
+      public?(true)
+      join_relationship(:co_author_posts)
+
+      filter(expr(is_nil(parent(co_author_posts.was_cancelled_at))))
+    end
+
+    many_to_many :co_authors_unfiltered, AshPostgres.Test.Author do
+      public?(true)
+      join_relationship(:co_author_posts)
+    end
 
     has_many :posts_with_matching_title, __MODULE__ do
+      public?(true)
       no_attributes?(true)
       filter(expr(parent(title) == title and parent(id) != id))
     end
 
-    has_many(:comments, AshPostgres.Test.Comment, destination_attribute: :post_id)
+    has_many :posts_with_matching_point, __MODULE__ do
+      public?(true)
+      no_attributes?(true)
+      filter(expr(parent(point) == point and parent(id) != id))
+    end
+
+    has_many :posts_with_matching_string_point, __MODULE__ do
+      public?(true)
+      no_attributes?(true)
+      filter(expr(parent(string_point) == string_point and parent(id) != id))
+    end
+
+    has_many(:comments, AshPostgres.Test.Comment, destination_attribute: :post_id, public?: true)
+
+    has_one :latest_comment, AshPostgres.Test.Comment do
+      sort(created_at: :desc)
+      from_many?(true)
+      public?(true)
+    end
+
+    has_one :second_latest_comment, AshPostgres.Test.Comment do
+      sort(created_at: :desc)
+      offset(1)
+      public?(true)
+    end
 
     has_many :comments_matching_post_title, AshPostgres.Test.Comment do
+      public?(true)
       filter(expr(title == parent_expr(title)))
     end
 
     has_many :popular_comments, AshPostgres.Test.Comment do
+      public?(true)
       destination_attribute(:post_id)
       filter(expr(likes > 10))
     end
 
+    has_many :comments_sorted_by_likes, AshPostgres.Test.Comment do
+      public?(true)
+      destination_attribute(:post_id)
+      sort(likes: :desc)
+    end
+
     has_many :comments_containing_title, AshPostgres.Test.Comment do
+      public?(true)
       manual(AshPostgres.Test.Post.CommentsContainingTitle)
     end
 
+    has_many :comments_with_high_rating, AshPostgres.Test.Comment do
+      public?(true)
+      filter(expr(ratings.score > 5))
+    end
+
     has_many(:ratings, AshPostgres.Test.Rating,
+      public?: true,
       destination_attribute: :resource_id,
       relationship_context: %{data_layer: %{table: "post_ratings"}}
     )
 
+    has_many :high_ratings, AshPostgres.Test.Rating do
+      public?(true)
+      destination_attribute(:resource_id)
+      relationship_context(%{data_layer: %{table: "post_ratings"}})
+      filter(expr(score > parent(score)))
+    end
+
     has_many(:post_links, AshPostgres.Test.PostLink,
+      public?: true,
       destination_attribute: :source_post_id,
       filter: [state: :active]
     )
 
     many_to_many(:linked_posts, __MODULE__,
+      public?: true,
       through: AshPostgres.Test.PostLink,
       join_relationship: :post_links,
       source_attribute_on_join_resource: :source_post_id,
       destination_attribute_on_join_resource: :destination_post_id
     )
 
-    has_many(:views, AshPostgres.Test.PostView)
+    many_to_many(:linked_multitenant_posts, AshPostgres.MultitenancyTest.Post,
+      public?: true,
+      through: AshPostgres.MultitenancyTest.CrossTenantPostLink,
+      source_attribute_on_join_resource: :source_id,
+      destination_attribute_on_join_resource: :dest_id
+    )
+
+    many_to_many(:followers, AshPostgres.Test.User,
+      public?: true,
+      through: AshPostgres.Test.PostFollower,
+      source_attribute_on_join_resource: :post_id,
+      destination_attribute_on_join_resource: :follower_id,
+      read_action: :active
+    )
+
+    has_many :active_followers_assoc, AshPostgres.Test.StatefulPostFollower do
+      public?(true)
+      filter(expr(state == :active))
+    end
+
+    many_to_many(:active_followers, AshPostgres.Test.User,
+      public?: true,
+      through: AshPostgres.Test.StatefulPostFollower,
+      join_relationship: :active_followers_assoc,
+      source_attribute_on_join_resource: :post_id,
+      destination_attribute_on_join_resource: :follower_id
+    )
+
+    many_to_many(:first_3_followers, AshPostgres.Test.User,
+      public?: true,
+      through: AshPostgres.Test.PostFollower,
+      join_relationship: :first_three_followers_assoc,
+      source_attribute_on_join_resource: :post_id,
+      destination_attribute_on_join_resource: :follower_id,
+      filter: expr(parent(first_three_followers_assoc.order) <= 3)
+    )
+
+    many_to_many(:stateful_followers, AshPostgres.Test.User,
+      public?: true,
+      through: AshPostgres.Test.StatefulPostFollower,
+      source_attribute_on_join_resource: :post_id,
+      destination_attribute_on_join_resource: :follower_id,
+      read_action: :active
+    )
+
+    has_many(:post_followers, AshPostgres.Test.PostFollower)
+
+    has_many :user_notification_recipients, AshPostgres.Test.NotificationRecipient do
+      filter(expr(not is_nil(user_id)))
+      sort(order: :asc)
+    end
+
+    # For testing join_relationship limit inheritance
+    has_many :top_three_post_followers, AshPostgres.Test.PostFollower do
+      sort(order: :asc)
+      limit(3)
+    end
+
+    many_to_many(:top_three_followers, AshPostgres.Test.User,
+      join_relationship: :top_three_post_followers,
+      source_attribute_on_join_resource: :post_id,
+      destination_attribute_on_join_resource: :follower_id
+    )
+
+    # For testing join_relationship with filter+sort+limit inheritance
+    has_many :filtered_top_post_followers, AshPostgres.Test.PostFollower do
+      filter(expr(order > 1))
+      sort(order: :asc)
+      limit(2)
+    end
+
+    many_to_many(:filtered_top_followers, AshPostgres.Test.User,
+      join_relationship: :filtered_top_post_followers,
+      source_attribute_on_join_resource: :post_id,
+      destination_attribute_on_join_resource: :follower_id
+    )
+
+    # For testing that an exists/2 predicate survives a limit + parent() filter
+    has_many :limited_comments_over_score, AshPostgres.Test.Comment do
+      filter(expr(likes > parent(score)))
+      sort(:likes)
+      limit(1)
+    end
+
+    many_to_many(:sorted_followers, AshPostgres.Test.User,
+      public?: true,
+      through: AshPostgres.Test.PostFollower,
+      join_relationship: :post_followers,
+      source_attribute_on_join_resource: :post_id,
+      destination_attribute_on_join_resource: :follower_id,
+      sort: [Ash.Sort.expr_sort(parent(post_followers.order), :integer)]
+    )
+
+    many_to_many(:sorted_notification_users, AshPostgres.Test.User,
+      public?: true,
+      through: AshPostgres.Test.NotificationRecipient,
+      join_relationship: :user_notification_recipients,
+      source_attribute_on_join_resource: :post_id,
+      destination_attribute_on_join_resource: :user_id,
+      sort: [Ash.Sort.expr_sort(parent(user_notification_recipients.order), :integer)]
+    )
+
+    many_to_many :tags, AshPostgres.Test.Tag do
+      public?(true)
+      through(AshPostgres.Test.PostTag)
+      sort(importance: :desc)
+    end
+
+    has_many(:views, AshPostgres.Test.PostView) do
+      public?(true)
+    end
+
+    has_many(:permalinks, AshPostgres.Test.Permalink)
+
+    belongs_to :db_point, AshPostgres.Test.DbPoint do
+      public?(true)
+      allow_nil?(true)
+      attribute_type(AshPostgres.Test.Point)
+    end
+
+    belongs_to :db_string_point, AshPostgres.Test.DbStringPoint do
+      public?(true)
+      allow_nil?(true)
+      attribute_type(AshPostgres.Test.StringPoint)
+    end
+
+    many_to_many :labels, AshPostgres.Test.Label do
+      source_attribute_on_join_resource(:content_id)
+      destination_attribute_on_join_resource(:label_id)
+      join_relationship(:label_entries)
+    end
+
+    has_many(:label_entries, AshPostgres.Test.LabelledContent,
+      relationship_context: %{data_layer: %{table: "post_labels"}},
+      destination_attribute: :content_id
+    )
   end
 
   validations do
-    validate(attribute_does_not_equal(:title, "not allowed"))
+    validate(attribute_does_not_equal(:title, "not allowed"),
+      where: [negate(action_is(:dont_validate))]
+    )
   end
 
   calculations do
+    calculate(
+      :count_of_comments_titled_by_actor_plus_one,
+      :integer,
+      expr(count_of_comments_titled_by_actor + 1)
+    )
+
+    calculate :relevance_score,
+              :integer,
+              expr(
+                if fragment(
+                     "ts_rank_cd(to_tsvector(?), ?, 32)::float",
+                     ^ref(:title),
+                     fragment("to_tsquery(?)", ^arg(:query))
+                   ) > 0.6 do
+                  1
+                else
+                  2
+                end
+              ) do
+      argument(:query, :string)
+    end
+
+    calculate(:upper_thing, :string, expr(fragment("UPPER(?)", uniq_on_upper)))
+
+    calculate(:upper_title, :string, expr(fragment("UPPER(?)", title)))
+    calculate(:title_twice, :string, expr(title <> title))
+    calculate(:title_twice_with_calc, :string, TitleTwice)
+
+    calculate(
+      :author_has_post_with_follower_named_fred,
+      :boolean,
+      expr(
+        exists(
+          author.posts,
+          has_follower_named_fred
+        )
+      )
+    )
+
+    calculate(
+      :author_has_post_with_title_matching_their_first_name,
+      :boolean,
+      expr(author.has_post_with_title_matching_first_name)
+    )
+
+    calculate(:has_author, :boolean, expr(exists(author, true == true)))
+
+    calculate(:has_comments, :boolean, expr(exists(comments, true == true)))
+
+    # DONT DO THIS. USE SOMETHING LIKE `first(comments.name)`
+    # We're doing this to test a specific breakage
+    calculate(:comment_title, :string, expr(comments.title))
+
+    calculate(
+      :has_no_followers,
+      :boolean,
+      expr(is_nil(author.posts.followers))
+    )
+
     calculate(:score_after_winning, :integer, expr((score || 0) + 1))
     calculate(:negative_score, :integer, expr(-score))
     calculate(:category_label, :ci_string, expr("(" <> category <> ")"))
     calculate(:score_with_score, :string, expr(score <> score))
     calculate(:foo_bar_from_stuff, :string, expr(stuff[:foo][:bar]))
+
+    calculate(:comment_metric, :integer, expr(fragment("(? * 100)", count_of_comments)))
+
+    calculate(
+      :complex_comment_metric,
+      :integer,
+      expr(
+        fragment(
+          "COALESCE(?, 0) + COALESCE(?, 1) * COALESCE(?, 0)",
+          sum_of_comment_likes_test,
+          count_of_comments,
+          max_comment_likes
+        )
+      )
+    )
+
+    calculate(
+      :multi_agg_calc,
+      :integer,
+      expr(
+        fragment(
+          "(? * ?) + ?",
+          count_of_comments,
+          count_of_high_like_comments,
+          sum_of_comment_likes_test
+        )
+      )
+    )
+
+    calculate(
+      :has_follower_named_fred,
+      :boolean,
+      expr(exists(followers, name == "fred"))
+    )
+
+    # Used to test nested exists with parent() — see nested_exists_test.exs
+    calculate(
+      :has_matching_author_by_unrelated_exists,
+      :boolean,
+      expr(
+        exists(
+          AshPostgres.Test.Author,
+          first_name == parent(title)
+        )
+      )
+    )
+
+    calculate(
+      :composite_origin,
+      AshPostgres.Test.CompositePoint,
+      expr(composite_type(%{x: 0, y: 0}, AshPostgres.Test.CompositePoint))
+    )
 
     calculate(
       :score_map,
@@ -167,10 +1144,36 @@ defmodule AshPostgres.Test.Post do
     )
 
     calculate(
+      :author_name_map,
+      :map,
+      expr(%{
+        first_name: author.first_name,
+        last_name: author.last_name
+      })
+    ) do
+      public?(true)
+
+      constraints(
+        fields: [
+          first_name: [type: :string, allow_nil?: true],
+          last_name: [type: :string, allow_nil?: true]
+        ]
+      )
+    end
+
+    calculate(
       :count_of_comments_called_baz,
       :integer,
       expr(count(comments, query: [filter: expr(title == "baz")]))
     )
+
+    calculate(
+      :max_comment_similarity,
+      :float,
+      expr(max(comments, expr_type: :float, expr: fragment("similarity(?, ?)", title, ^arg(:to))))
+    ) do
+      argument(:to, :string, allow_nil?: false)
+    end
 
     calculate(
       :agg_map,
@@ -182,14 +1185,48 @@ defmodule AshPostgres.Test.Post do
       })
     )
 
-    calculate(:c_times_p, :integer, expr(count_of_comments * count_of_linked_posts),
-      load: [:count_of_comments, :count_of_linked_posts]
+    calculate(:c_times_p, :integer, expr(count_of_comments * count_of_linked_posts))
+
+    calculate(
+      :score_category,
+      :integer,
+      expr(
+        cond do
+          score > 100 -> 3
+          score > 50 -> 2
+          score > 0 -> 1
+          true -> 0
+        end
+      )
     )
+
+    calculate(
+      :literal_map_in_expr,
+      :map,
+      expr(
+        cond do
+          title == "match" ->
+            %{match: true, of: "match"}
+
+          title == "not-match" ->
+            %{match: true, of: "not-match"}
+
+          true ->
+            %{match: false}
+        end
+      )
+    ) do
+      constraints(fields: [match: [type: :boolean], of: [type: :string]])
+    end
 
     calculate :similarity,
               :boolean,
               expr(fragment("(to_tsvector(?) @@ ?)", title, ^arg(:search))) do
       argument(:search, AshPostgres.Tsquery, allow_expr?: true, allow_nil?: false)
+    end
+
+    calculate :score_plus, :integer, expr(score + ^arg(:amount)) do
+      argument(:amount, :integer, allow_nil?: false)
     end
 
     calculate :query, AshPostgres.Tsquery, expr(fragment("to_tsquery(?)", ^arg(:search))) do
@@ -212,7 +1249,13 @@ defmodule AshPostgres.Test.Post do
       expr(latest_arbitrary_timestamp > fragment("now()"))
     )
 
-    calculate(:has_future_comment, :boolean, expr(latest_comment_created_at > fragment("now()")))
+    calculate(
+      :has_future_comment,
+      :boolean,
+      expr(latest_comment_created_at > fragment("now()") || type(false, :boolean))
+    )
+
+    calculate(:price_times_2, :integer, expr(price * 2))
 
     calculate(
       :was_created_in_the_last_month,
@@ -228,6 +1271,22 @@ defmodule AshPostgres.Test.Post do
     )
 
     calculate(
+      :start_of_day,
+      :datetime,
+      expr(start_of_day(fragment("now()"), "EST"))
+    )
+
+    calculate(:author_count_of_posts, :integer, expr(author.count_of_posts_with_calc))
+
+    calculate(
+      :sum_of_author_count_of_posts,
+      :integer,
+      expr(sum(author, field: :count_of_posts))
+    )
+
+    calculate(:author_count_of_posts_agg, :integer, expr(author.count_of_posts))
+
+    calculate(
       :price_string,
       :string,
       CalculatePostPriceString
@@ -238,11 +1297,79 @@ defmodule AshPostgres.Test.Post do
       :string,
       CalculatePostPriceStringWithSymbol
     )
+
+    calculate(:author_first_name_calc, :string, expr(author.first_name))
+    calculate(:author_first_name_ref_agg_calc, :string, expr(author_first_name))
+
+    calculate(:author_profile_description_from_agg, :string, expr(author_profile_description))
+
+    calculate(:latest_comment_title, :string, expr(latest_comment.title), allow_nil?: true)
+
+    calculate(:concated_comment_titles, :string, expr(fragment("concat(?)", comment_titles)))
+
+    calculate :datetime_of_first_comment_by_author,
+              :utc_datetime_usec,
+              expr(
+                first(comments,
+                  field: :created_at,
+                  query: [
+                    filter: author_id == ^arg(:author_id)
+                  ]
+                )
+              ) do
+      public?(true)
+      argument(:author_id, :uuid, allow_nil?: false)
+    end
+
+    calculate :estimated_reading_time,
+              :integer,
+              expr(
+                fragment(
+                  "COALESCE(?, ?, ?) + COALESCE(?, 0)",
+                  total_edited_time,
+                  total_planned_time,
+                  base_reading_time,
+                  total_comment_time
+                )
+              ) do
+      public?(true)
+    end
+
+    calculate(:past_datetime1?, :boolean, expr(now() > datetime))
+    calculate(:past_datetime2?, :boolean, expr(datetime <= now()))
+
+    # Test case for join_filters bug where Ash.Filter structs are not converted to Ecto expressions
+    calculate(
+      :max_rating_with_join_filter,
+      :integer,
+      expr(
+        max([:comments, :ratings],
+          query: [filter: expr(score > 0)],
+          field: :score,
+          join_filters: %{comments: expr(author_id == ^actor(:id))}
+        )
+      )
+    )
   end
 
   aggregates do
+    first(:latest_comment_title_agg, [:latest_comment], :title)
+    sum(:sum_of_comment_ratings_calc, [:comments, :ratings], :double_score)
     count(:count_of_comments, :comments)
+
+    count :count_of_comments_titled_by_actor, :comments do
+      filter(expr(title == ^actor(:title)))
+    end
+
+    count :count_of_comments_with_same_name, :comments do
+      filter(expr(title == parent(title)))
+    end
+
     count(:count_of_linked_posts, :linked_posts)
+
+    count :count_of_comments_in_titles, :comments do
+      read_action(:read_in_titles)
+    end
 
     count :count_of_comments_called_match, :comments do
       filter(title: "match")
@@ -252,14 +1379,35 @@ defmodule AshPostgres.Test.Post do
       filter(title: "match")
     end
 
+    count :count_of_comments_matching_org_name, [
+      :posts_with_matching_title,
+      :comments
+    ] do
+      filter(expr(parent(organization.name) == title))
+    end
+
     count(:count_of_comments_containing_title, :comments_containing_title)
 
     first :first_comment, :comments, :title do
       sort(title: :asc_nils_last)
     end
 
+    first :first_comment_nils_first, :comments, :title do
+      sort(title: :asc_nils_first)
+    end
+
+    first :first_comment_nils_first_called_stuff, :comments, :title do
+      sort(title: :asc_nils_first)
+      filter(expr(title == "stuff"))
+    end
+
+    first :first_comment_nils_first_include_nil, :comments, :title do
+      include_nil?(true)
+      sort(title: :asc_nils_first)
+    end
+
     first :last_comment, :comments, :title do
-      sort(title: :desc)
+      sort(title: :desc, title: :asc)
     end
 
     first(:author_first_name, :author, :first_name)
@@ -280,9 +1428,44 @@ defmodule AshPostgres.Test.Post do
       sort(title: :asc_nils_last)
     end
 
+    list :comment_titles_with_nils, :comments, :title do
+      sort(title: :asc_nils_last)
+      include_nil?(true)
+    end
+
     list :uniq_comment_titles, :comments, :title do
       uniq?(true)
       sort(title: :asc_nils_last)
+    end
+
+    list :uniq_comment_titles_sorted_by_likes, :comments, :title do
+      uniq?(true)
+      sort(likes: :desc)
+    end
+
+    list :uniq_titles_of_comments_sorted_by_likes, :comments_sorted_by_likes, :title do
+      uniq?(true)
+    end
+
+    list(:comment_ids, :comments, :id)
+
+    sum :total_edited_time, :comments, :edited_duration do
+      filter(expr(version == :edited))
+      public?(true)
+    end
+
+    sum :total_planned_time, :comments, :planned_duration do
+      filter(expr(version == :planned))
+      public?(true)
+    end
+
+    sum :total_comment_time, :comments, :reading_time do
+      public?(true)
+    end
+
+    count :published_comments, :comments do
+      filter(expr(status == :published))
+      public?(true)
     end
 
     count :count_comment_titles, :comments do
@@ -294,6 +1477,8 @@ defmodule AshPostgres.Test.Post do
       uniq?(true)
     end
 
+    count(:count_of_ratings, :ratings)
+
     list :comment_titles_with_5_likes, :comments, :title do
       sort(title: :asc_nils_last)
       filter(expr(likes >= 5))
@@ -304,6 +1489,10 @@ defmodule AshPostgres.Test.Post do
 
     sum :sum_of_popular_comment_rating_scores, [:comments, :ratings], :score do
       filter(expr(score > 5))
+    end
+
+    sum :sum_of_odd_comment_rating_scores, [:comments, :ratings], :score do
+      filter(expr(rem(score, 2) == 1))
     end
 
     sum(:sum_of_popular_comment_rating_scores_2, [:comments, :popular_ratings], :score)
@@ -354,15 +1543,36 @@ defmodule AshPostgres.Test.Post do
     first :latest_arbitrary_timestamp, :comments, :arbitrary_timestamp do
       sort(arbitrary_timestamp: :desc)
     end
+
+    first(:author_profile_description, :author, :description)
+
+    count :count_comments_with_modify_query, :comments do
+      read_action(:with_modify_query)
+    end
+
+    sum(:sum_of_comment_likes_test, :comments, :likes)
+    max(:max_comment_likes, :comments, :likes)
+
+    count :count_of_high_like_comments, :comments do
+      filter(expr(likes > 10))
+    end
+
+    count :count_of_comments_with_ratings, :comments do
+      filter(expr(has_rating == true))
+    end
+
+    count :count_of_comments_with_high_ratings, :comments do
+      filter(expr(latest_rating_score > 5))
+    end
   end
 end
 
 defmodule CalculatePostPriceString do
   @moduledoc false
-  use Ash.Calculation
+  use Ash.Resource.Calculation
 
   @impl true
-  def select(_, _, _), do: [:price]
+  def load(_, _, _), do: [:price]
 
   @impl true
   def calculate(records, _, _) do
@@ -376,7 +1586,7 @@ end
 
 defmodule CalculatePostPriceStringWithSymbol do
   @moduledoc false
-  use Ash.Calculation
+  use Ash.Resource.Calculation
 
   @impl true
   def load(_, _, _), do: [:price_string]
@@ -386,5 +1596,21 @@ defmodule CalculatePostPriceStringWithSymbol do
     Enum.map(records, fn %{price_string: price_string} ->
       "#{price_string}$"
     end)
+  end
+end
+
+defmodule AshPostgres.Test.Post.ManualUpdate do
+  @moduledoc false
+  use Ash.Resource.ManualUpdate
+
+  def update(changeset, _opts, _context) do
+    {
+      :ok,
+      changeset.data
+      |> Ash.Changeset.for_update(:update, changeset.attributes)
+      |> Ash.Changeset.force_change_attribute(:title, "manual")
+      |> Ash.Changeset.load(:comments)
+      |> Ash.update!()
+    }
   end
 end

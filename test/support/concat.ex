@@ -1,7 +1,10 @@
+# SPDX-FileCopyrightText: 2019 ash_postgres contributors <https://github.com/ash-project/ash_postgres/graphs/contributors>
+#
+# SPDX-License-Identifier: MIT
+
 defmodule AshPostgres.Test.Concat do
   @moduledoc false
-  use Ash.Calculation
-  require Ash.Query
+  use Ash.Resource.Calculation
 
   def init(opts) do
     if opts[:keys] && is_list(opts[:keys]) && Enum.all?(opts[:keys], &is_atom/1) do
@@ -11,16 +14,16 @@ defmodule AshPostgres.Test.Concat do
     end
   end
 
-  def expression(opts, %{separator: separator}) do
+  def expression(opts, %{arguments: %{separator: separator}}) do
     Enum.reduce(opts[:keys], nil, fn key, expr ->
       if expr do
         if separator do
-          Ash.Query.expr(^expr <> ^separator <> ref(^key))
+          expr(^expr <> ^separator <> ^ref(key))
         else
-          Ash.Query.expr(^expr <> ref(^key))
+          expr(^expr <> ^ref(key))
         end
       else
-        Ash.Query.expr(ref(^key))
+        expr(^ref(key))
       end
     end)
   end

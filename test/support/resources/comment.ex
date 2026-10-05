@@ -1,6 +1,11 @@
+# SPDX-FileCopyrightText: 2019 ash_postgres contributors <https://github.com/ash-project/ash_postgres/graphs/contributors>
+#
+# SPDX-License-Identifier: MIT
+
 defmodule AshPostgres.Test.Comment do
   @moduledoc false
   use Ash.Resource,
+    domain: AshPostgres.Test.Domain,
     data_layer: AshPostgres.DataLayer,
     authorizers: [
       Ash.Policy.Authorizer
@@ -10,6 +15,10 @@ defmodule AshPostgres.Test.Comment do
     bypass action_type(:read) do
       # Check that the comment is in the same org (via post) as actor
       authorize_if(relates_to_actor_via([:post, :organization, :users]))
+    end
+
+    policy action(:read_in_titles) do
+      authorize_if(expr(title_in_list?(titles: ^actor(:titles))))
     end
   end
 
@@ -23,6 +32,7 @@ defmodule AshPostgres.Test.Comment do
   end
 
   actions do
+    default_accept(:*)
     defaults([:read, :update, :destroy])
 
     create :create do
@@ -31,36 +41,200 @@ defmodule AshPostgres.Test.Comment do
 
       change(manage_relationship(:rating, :ratings, on_missing: :ignore, on_match: :create))
     end
+
+    read :with_modify_query do
+      modify_query({AshPostgres.Test.Comment.ModifyQuery, :modify, []})
+    end
+
+    read(:read_in_titles)
+
+    # Create actions with manage_relationship from hooks
+    create :create_with_post_from_before_transaction do
+      argument(:rating, :map)
+
+      change(fn changeset, _context ->
+        Ash.Changeset.before_transaction(changeset, fn changeset ->
+          Ash.Changeset.manage_relationship(
+            changeset,
+            :post,
+            %{title: "created-in-before-transaction"},
+            on_no_match: :create
+          )
+        end)
+      end)
+    end
+
+    create :create_with_post_from_before_action do
+      argument(:rating, :map)
+
+      change(fn changeset, _context ->
+        Ash.Changeset.before_action(changeset, fn changeset ->
+          Ash.Changeset.manage_relationship(
+            changeset,
+            :post,
+            %{title: "created-in-before-action"},
+            on_no_match: :create
+          )
+        end)
+      end)
+    end
+
+    # Update actions with manage_relationship from hooks (non-atomic)
+    update :update_with_post_from_before_transaction do
+      require_atomic?(false)
+
+      change(fn changeset, _context ->
+        Ash.Changeset.before_transaction(changeset, fn changeset ->
+          Ash.Changeset.manage_relationship(
+            changeset,
+            :post,
+            %{title: "created-in-before-transaction"},
+            on_no_match: :create
+          )
+        end)
+      end)
+    end
+
+    update :update_with_post_from_before_action do
+      require_atomic?(false)
+
+      change(fn changeset, _context ->
+        Ash.Changeset.before_action(changeset, fn changeset ->
+          Ash.Changeset.manage_relationship(
+            changeset,
+            :post,
+            %{title: "created-in-before-action"},
+            on_no_match: :create
+          )
+        end)
+      end)
+    end
   end
 
   attributes do
     uuid_primary_key(:id)
-    attribute(:title, :string)
-    attribute(:likes, :integer)
-    attribute(:arbitrary_timestamp, :utc_datetime_usec)
-    create_timestamp(:created_at, writable?: true)
+    attribute(:title, :string, public?: true)
+    attribute(:likes, :integer, public?: true)
+    attribute(:arbitrary_timestamp, :utc_datetime_usec, public?: true)
+    attribute(:edited_duration, :integer, public?: true)
+    attribute(:planned_duration, :integer, public?: true)
+    attribute(:reading_time, :integer, public?: true)
+    attribute(:version, :atom, constraints: [one_of: [:edited, :planned]], public?: true)
+
+    attribute(:status, :atom,
+      constraints: [one_of: [:published, :draft, :pending]],
+      public?: true
+    )
+
+    create_timestamp(:created_at, writable?: true, public?: true)
   end
 
   aggregates do
     first(:post_category, :post, :category)
+    first(:post_public_or_false, :post, :public, default: false)
     count(:co_popular_comments, [:post, :popular_comments])
     count(:count_of_comments_containing_title, [:post, :comments_containing_title])
     list(:posts_for_comments_containing_title, [:post, :comments_containing_title, :post], :title)
+
+    list :linked_comment_post_ids, [:linked_comments, :post], :id do
+      uniq?(true)
+    end
+
+    first :latest_rating_score, :ratings, :score do
+      sort(score: :desc)
+    end
+
+    count(:count_of_ratings, :ratings)
+
+    # top_ratings has `limit: 2` — aggregates over it should respect that limit.
+    count(:count_of_top_ratings, :top_ratings)
+    list(:top_rating_scores, :top_ratings, :score)
+  end
+
+  calculations do
+    calculate(:expects_only_one_comment, :string, fn records, _ ->
+      if Enum.count(records) > 1 do
+        raise "expected only one comment"
+      end
+
+      {:ok,
+       Enum.map(records, fn _ ->
+         "hello"
+       end)}
+    end)
+
+    calculate(:has_rating, :boolean, expr(not is_nil(latest_rating_score)))
+
+    calculate(
+      :post_count_of_comments,
+      :integer,
+      expr(post.count_of_comments)
+    )
+
+    calculate :title_in_list?, :boolean, AshPostgres.Test.Comment.TitleInList do
+      argument(:titles, {:array, :string}, allow_nil?: false)
+    end
   end
 
   relationships do
-    belongs_to(:post, AshPostgres.Test.Post)
-    belongs_to(:author, AshPostgres.Test.Author)
+    belongs_to(:post, AshPostgres.Test.Post) do
+      public?(true)
+    end
+
+    belongs_to(:sorted_post, AshPostgres.Test.Post) do
+      public?(true)
+      define_attribute?(false)
+      source_attribute(:post_id)
+      read_action(:sorted_by_title)
+    end
+
+    belongs_to(:author, AshPostgres.Test.Author) do
+      public?(true)
+    end
+
+    many_to_many(:linked_comments, AshPostgres.Test.Comment) do
+      public?(true)
+      through(AshPostgres.Test.CommentLink)
+      source_attribute_on_join_resource(:source_id)
+      destination_attribute_on_join_resource(:dest_id)
+    end
 
     has_many(:ratings, AshPostgres.Test.Rating,
+      public?: true,
       destination_attribute: :resource_id,
       relationship_context: %{data_layer: %{table: "comment_ratings"}}
     )
 
+    has_many :top_ratings, AshPostgres.Test.Rating do
+      destination_attribute(:resource_id)
+      relationship_context(%{data_layer: %{table: "comment_ratings"}})
+      sort(score: :desc)
+      limit(2)
+    end
+
     has_many(:popular_ratings, AshPostgres.Test.Rating,
+      public?: true,
       destination_attribute: :resource_id,
       relationship_context: %{data_layer: %{table: "comment_ratings"}},
       filter: expr(score > 5)
     )
+
+    has_many(:ratings_with_same_score_as_post, AshPostgres.Test.Rating,
+      public?: true,
+      destination_attribute: :resource_id,
+      relationship_context: %{data_layer: %{table: "comment_ratings"}},
+      filter: expr(parent(post.score) == score)
+    )
+  end
+end
+
+defmodule AshPostgres.Test.Comment.ModifyQuery do
+  @moduledoc """
+  Raises when modifying query so we can assert
+  this code path is called.
+  """
+
+  def modify(_ash_query, _ecto_query) do
+    raise "modifying query!"
   end
 end

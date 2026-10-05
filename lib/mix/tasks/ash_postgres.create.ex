@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2019 ash_postgres contributors <https://github.com/ash-project/ash_postgres/graphs/contributors>
+#
+# SPDX-License-Identifier: MIT
+
 defmodule Mix.Tasks.AshPostgres.Create do
   use Mix.Task
 
@@ -5,26 +9,30 @@ defmodule Mix.Tasks.AshPostgres.Create do
 
   @switches [
     quiet: :boolean,
-    apis: :string,
+    domains: :string,
     no_compile: :boolean,
-    no_deps_check: :boolean
+    no_deps_check: :boolean,
+    repo: :string,
+    r: :string
   ]
 
   @aliases [
-    q: :quiet
+    q: :quiet,
+    r: :repo
   ]
 
   @moduledoc """
-  Create the storage for repos in all resources for the given (or configured) apis.
+  Create the storage for repos in all resources for the given (or configured) domains.
 
   ## Examples
 
       mix ash_postgres.create
-      mix ash_postgres.create --apis MyApp.Api1,MyApp.Api2
+      mix ash_postgres.create --domains MyApp.Domain1,MyApp.Domain2
 
   ## Command line options
 
-    * `--apis` - the apis who's repos you want to migrate.
+    * `--domains` - the domains who's repos you want to migrate.
+    * `-r, --repo` - the repo to create
     * `--quiet` - do not log output
     * `--no-compile` - do not compile before creating
     * `--no-deps-check` - do not compile before creating
@@ -34,15 +42,18 @@ defmodule Mix.Tasks.AshPostgres.Create do
   def run(args) do
     {opts, _} = OptionParser.parse!(args, strict: @switches, aliases: @aliases)
 
-    repos = AshPostgres.MixHelpers.repos!(opts, args)
+    repos =
+      AshPostgres.Mix.Helpers.repos!(opts, args)
+      |> Enum.filter(fn repo -> repo.create?() end)
 
     repo_args =
       Enum.flat_map(repos, fn repo ->
         ["-r", to_string(repo)]
       end)
 
-    rest_opts = AshPostgres.MixHelpers.delete_arg(args, "--apis")
+    rest_opts = AshPostgres.Mix.Helpers.delete_arg(args, "--domains")
 
+    Mix.Task.reenable("ecto.create")
     Mix.Task.run("ecto.create", repo_args ++ rest_opts)
   end
 end

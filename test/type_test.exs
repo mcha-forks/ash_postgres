@@ -1,31 +1,36 @@
+# SPDX-FileCopyrightText: 2019 ash_postgres contributors <https://github.com/ash-project/ash_postgres/graphs/contributors>
+#
+# SPDX-License-Identifier: MIT
+
 defmodule AshPostgres.Test.TypeTest do
   use AshPostgres.RepoCase, async: false
-  alias AshPostgres.Test.{Api, Post}
+  alias AshPostgres.Test.Post
+  alias AshPostgres.Test.RSVP
 
   require Ash.Query
 
   test "complex custom types can be used" do
     post =
       Post
-      |> Ash.Changeset.new(%{title: "title", point: {1.0, 2.0, 3.0}})
-      |> Api.create!()
+      |> Ash.Changeset.for_create(:create, %{title: "title", point: {1.0, 2.0, 3.0}})
+      |> Ash.create!()
 
     assert post.point == {1.0, 2.0, 3.0}
   end
 
   test "complex custom types can be accessed with fragments" do
     Post
-    |> Ash.Changeset.new(%{title: "title", point: {1.0, 2.0, 3.0}})
-    |> Api.create!()
+    |> Ash.Changeset.for_create(:create, %{title: "title", point: {1.0, 2.0, 3.0}})
+    |> Ash.create!()
 
     Post
-    |> Ash.Changeset.new(%{title: "title", point: {2.0, 1.0, 3.0}})
-    |> Api.create!()
+    |> Ash.Changeset.for_create(:create, %{title: "title", point: {2.0, 1.0, 3.0}})
+    |> Ash.create!()
 
     assert [%{point: {2.0, 1.0, 3.0}}] =
              Post
              |> Ash.Query.filter(fragment("(?)[1] > (?)[2]", point, point))
-             |> Api.read!()
+             |> Ash.read!()
   end
 
   test "uuids can be used as strings in fragments" do
@@ -33,6 +38,125 @@ defmodule AshPostgres.Test.TypeTest do
 
     Post
     |> Ash.Query.filter(fragment("? = ?", id, type(^uuid, :uuid)))
-    |> Api.read!()
+    |> Ash.read!()
+  end
+
+  test "complex custom types can be used in filters" do
+    Post
+    |> Ash.Changeset.for_create(:create, %{point: {1.0, 2.0, 3.0}, composite_point: %{x: 1, y: 2}})
+    |> Ash.create!()
+
+    assert [_] =
+             Post
+             |> Ash.Query.filter(composite_point == %{x: 1, y: 2})
+             |> Ash.read!()
+
+    assert [_] =
+             Post
+             |> Ash.Query.filter(point == ^{1.0, 2.0, 3.0})
+             |> Ash.read!()
+  end
+
+  test "complex custom types can be used in relationships" do
+    [p | _] =
+      for _ <- 1..4//1 do
+        Post
+        |> Ash.Changeset.for_create(:create, %{
+          point: {1.0, 2.0, 3.0},
+          string_point: "1.0,2.0,3.0"
+        })
+        |> Ash.create!()
+      end
+
+    p = p |> Ash.load!([:posts_with_matching_point, :posts_with_matching_string_point])
+
+    assert Enum.count(p.posts_with_matching_point) == 3
+    assert Enum.count(p.posts_with_matching_string_point) == 3
+
+    %{id: id} =
+      Post
+      |> Ash.Changeset.for_create(:create)
+      |> Ash.Changeset.manage_relationship(:db_point, %{id: {2.0, 3.0, 4.0}}, type: :create)
+      |> Ash.create!()
+
+    [p] =
+      Post
+      |> Ash.Query.for_read(:read)
+      |> Ash.Query.load(:db_point)
+      |> Ash.Query.filter(id == ^id)
+      |> Ash.read!()
+
+    assert p.db_point_id == {2.0, 3.0, 4.0}
+    assert p.db_point.id == {2.0, 3.0, 4.0}
+
+    %{id: id} =
+      Post
+      |> Ash.Changeset.for_create(:create)
+      |> Ash.Changeset.manage_relationship(:db_string_point, %{id: "2.0,3.0,4.0"}, type: :create)
+      |> Ash.create!()
+
+    [p] =
+      Post
+      |> Ash.Query.for_read(:read)
+      |> Ash.Query.load(:db_string_point)
+      |> Ash.Query.filter(id == ^id)
+      |> Ash.read!()
+
+    assert %{x: 2.0, y: 3.0, z: 4.0} = p.db_string_point_id
+    assert %{x: 2.0, y: 3.0, z: 4.0} = p.db_string_point.id
+  end
+
+  test "casting integer to string works" do
+    Post |> Ash.Changeset.for_create(:create) |> Ash.create!()
+
+    post = Ash.Query.for_read(Post, :with_version_check, version: 1) |> Ash.read!()
+    refute is_nil(post)
+  end
+
+  test "array expressions work with custom types that map atoms to integers" do
+    rsvp = RSVP |> Ash.Changeset.for_create(:create, %{response: :accepted}) |> Ash.create!()
+
+    updated = rsvp |> Ash.Changeset.for_update(:clear_response, %{}) |> Ash.update!()
+
+    assert updated.response == :awaiting
+  end
+
+  test "operator_expression rewrites operator to custom expression" do
+    import ExUnit.CaptureLog
+    import Ash.Expr
+
+    prev = Application.get_env(:ash_postgres, AshPostgres.TestRepo)
+    Application.put_env(:ash_postgres, AshPostgres.TestRepo, Keyword.put(prev, :log, :info))
+
+    try do
+      Post
+      |> Ash.Changeset.for_create(:create, %{title: "low", score: 5})
+      |> Ash.create!()
+
+      Post
+      |> Ash.Changeset.for_create(:create, %{title: "mid", score: 25})
+      |> Ash.create!()
+
+      Post
+      |> Ash.Changeset.for_create(:create, %{title: "high", score: 50})
+      |> Ash.create!()
+
+      range = Enum.to_list(20..30)
+
+      log =
+        capture_log(fn ->
+          results =
+            Post
+            |> Ash.Query.filter(expr(score in ^range))
+            |> Ash.read!()
+
+          assert length(results) == 1
+          assert hd(results).title == "mid"
+        end)
+
+      assert log =~ "custom_any("
+    after
+      Application.put_env(:ash_postgres, AshPostgres.TestRepo, prev)
+    end
   end
 end
